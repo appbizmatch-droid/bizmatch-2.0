@@ -2,11 +2,13 @@ import {
   View, Text, TouchableOpacity, Modal, FlatList,
   StyleSheet, TouchableWithoutFeedback,
 } from 'react-native';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import useAppStore from '../store/appStore';
+import useAuthStore from '../store/authStore';
+import { supabase } from '../services/supabase';
 
 const TYPE_ICON = {
   evidence_added:        '📊',
@@ -39,45 +41,83 @@ const TYPE_BODY = {
   deal_breaker_flagged:  (p) => p?.detail || 'A potential deal breaker needs review.',
 };
 
+// Realtime rows come back snake_case (raw DB columns); the REST API returns
+// camelCase. Normalize both into one shape so the rest of the component
+// doesn't care which source a notification came from.
+function normalizeRow(row) {
+  return {
+    id: String(row.id),
+    type: row.type,
+    refId: row.refId ?? row.ref_id,
+    payload: row.payload,
+    readAt: row.readAt ?? row.read_at ?? null,
+    createdAt: row.createdAt ?? row.created_at,
+  };
+}
+
 export default function NotificationBell({ tintColor }) {
   const navigation = useNavigation();
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
-  const intervalRef = useRef(null);
+  const userId = useAuthStore(s => s.user?.id);
   const notificationTick = useAppStore(s => s.notificationTick);
-  const seenIdsRef = useRef(null); // null = first load, Set after first load
 
+  const announceIfUnread = useCallback((n) => {
+    if (n.readAt) return;
+    useAppStore.getState().showBanner({
+      title: TYPE_LABEL[n.type] || 'New Notification',
+      body: (TYPE_BODY[n.type] || (() => ''))(n.payload),
+      data: { type: n.type, refId: n.refId, founderId: n.payload?.founderId },
+    });
+  }, []);
+
+  // One-time fetch for initial state (and whenever something else in the
+  // app bumps notificationTick to force a resync) — Realtime then takes over
+  // for live updates instead of polling this endpoint on an interval.
   const fetchNotifications = useCallback(async () => {
     try {
       const { data } = await api.get('/notifications');
-      setNotifications(data);
-
-      if (seenIdsRef.current === null) {
-        seenIdsRef.current = new Set(data.map(n => n.id));
-        return;
-      }
-
-      const newUnread = data.filter(n => !n.readAt && !seenIdsRef.current.has(n.id));
-      if (newUnread.length > 0) {
-        const newest = newUnread[0];
-        useAppStore.getState().showBanner({
-          title: TYPE_LABEL[newest.type] || 'New Notification',
-          body: (TYPE_BODY[newest.type] || (() => ''))(newest.payload),
-          data: { type: newest.type, refId: newest.refId, founderId: newest.payload?.founderId },
-        });
-      }
-      seenIdsRef.current = new Set(data.map(n => n.id));
+      setNotifications(data.map(normalizeRow));
     } catch (err) {
       console.error('[Bell] fetch error', err);
     }
   }, []);
 
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications, notificationTick]);
+
   useEffect(() => {
-    fetchNotifications();
-    clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(fetchNotifications, 5000);
-    return () => clearInterval(intervalRef.current);
-  }, [fetchNotifications, notificationTick]);
+    if (!userId) return undefined;
+
+    const topic = `notifications:${userId}`;
+    // supabase-js caches channels by topic and returns the same object for
+    // an identical topic string — if this effect re-fires while a channel
+    // for this topic is still registered (fast remount, multiple Bell
+    // instances, StrictMode double-invoke), .channel() hands back the
+    // already-subscribed instance and calling .on() on it throws
+    // ("cannot add postgres_changes callbacks ... after subscribe()"),
+    // which crashes the whole screen. Clear any stale registration first.
+    const stale = supabase.getChannels().find(c => c.topic === `realtime:${topic}`);
+    if (stale) supabase.removeChannel(stale);
+
+    const channel = supabase
+      .channel(topic)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}`,
+      }, (payload) => {
+        const row = normalizeRow(payload.new ?? payload.old);
+        if (payload.eventType === 'INSERT') {
+          setNotifications(prev => prev.some(n => n.id === row.id) ? prev : [row, ...prev]);
+          announceIfUnread(row);
+        } else if (payload.eventType === 'UPDATE') {
+          setNotifications(prev => prev.map(n => (n.id === row.id ? row : n)));
+        } else if (payload.eventType === 'DELETE') {
+          setNotifications(prev => prev.filter(n => n.id !== row.id));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, announceIfUnread]);
 
   const unreadCount = notifications.filter(n => !n.readAt).length;
 
@@ -96,10 +136,17 @@ export default function NotificationBell({ tintColor }) {
   const handleTap = (item) => {
     setOpen(false);
     if (!item.readAt) markIds([item.id]);
-    // Founder-scoped notifications carry the founder's id as refId — every
+    // Founder-scoped notifications (evidence_added, deal_breaker_flagged,
+    // match_ready) carry the founder's id in payload.founderId — every
     // navigator (admin or founder-self) has a 'FounderProfile' route.
     if (item.payload?.founderId) {
       navigation.navigate('FounderProfile', { founderId: item.payload.founderId });
+      return;
+    }
+    // assessment_requested carries the activity id instead (no founder yet —
+    // it's a request to go evaluate participants on that activity).
+    if (item.type === 'assessment_requested' && item.payload?.activityId) {
+      navigation.navigate('ActivityDetail', { activityId: item.payload.activityId });
     }
   };
 
