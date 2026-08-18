@@ -30,10 +30,17 @@ function scaleOptionToScore(optionId?: string): number | null {
 // marked completed (see completeInterview below, which guards against re-scoring an
 // already-completed interview).
 async function scoreInterviewEvaluation(interview: {
+  id: string;
   founderId: string;
   interviewerId: string | null;
   answers: Record<string, InterviewAnswerRecord>;
 }): Promise<void> {
+  // Re-scoring (an edit to an already-completed interview) must replace only
+  // this interview's own evidence rows, not another interview's or the DNA
+  // self-assessment's — evidence.interview_id scopes the delete to exactly
+  // what this interview last contributed.
+  await query(`DELETE FROM evidence WHERE interview_id = $1`, [interview.id]);
+
   for (const [questionId, meta] of Object.entries(INTERVIEW_EVALUATION_QUESTIONS)) {
     const record = interview.answers?.[questionId];
     if (!record || record.skipped || !record.value) continue;
@@ -46,9 +53,9 @@ async function scoreInterviewEvaluation(interview: {
     if (score == null) continue;
 
     await query(
-      `INSERT INTO evidence (founder_id, source_type, evaluator_id, dimension, signal, score, weight)
-       VALUES ($1, 'interview', $2, $3, $4, $5, $6)`,
-      [interview.founderId, interview.interviewerId, meta.dimension, meta.text, score, SOURCE_WEIGHTS.interview],
+      `INSERT INTO evidence (founder_id, source_type, evaluator_id, dimension, signal, score, weight, interview_id)
+       VALUES ($1, 'interview', $2, $3, $4, $5, $6, $7)`,
+      [interview.founderId, interview.interviewerId, meta.dimension, meta.text, score, SOURCE_WEIGHTS.interview, interview.id],
     );
   }
 
@@ -195,6 +202,7 @@ async function completeInterview(req: Request, params: Record<string, string>): 
   // must not score its evaluation answers into evidence a second time.
   if (interview.status !== "completed") {
     await scoreInterviewEvaluation({
+      id: interview.id,
       founderId: interview.founderId,
       interviewerId: interview.interviewerId,
       answers: interview.answers,
@@ -202,6 +210,41 @@ async function completeInterview(req: Request, params: Record<string, string>): 
   }
 
   await FounderInterviewsModel.complete(params.id);
+  return json({ ok: true });
+}
+
+// PUT /functions/v1/founder-interviews/:id/answers  (admin) — edits a
+// COMPLETED interview's answers/meta in place and re-scores it. Unlike
+// saveInterview (blocked once completed, since that's autosave during a
+// live session), this is the explicit "I got back to my notes and want to
+// fix what I recorded" edit path an evaluator needs after the fact — the
+// interview stays completed throughout, evidence for it is replaced, and
+// the founder's DNA + matches are recomputed against the corrected answers.
+async function editCompletedInterview(req: Request, params: Record<string, string>): Promise<Response> {
+  const user = await authenticate(req);
+  if (!user) return json({ error: "Unauthorized" }, 401);
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+
+  const existing = await FounderInterviewsModel.get(params.id);
+  if (!existing) return json({ error: "Interview not found" }, 404);
+  if (existing.status !== "completed") {
+    return json({ error: "Only a completed interview can be edited through this endpoint — use PUT /:id while it's in progress." }, 409);
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const { meta, answers } = body as { meta?: unknown; answers?: unknown };
+  await FounderInterviewsModel.save(params.id, meta, answers, undefined);
+
+  const updated = await FounderInterviewsModel.get(params.id);
+  if (updated) {
+    await scoreInterviewEvaluation({
+      id: updated.id,
+      founderId: updated.founderId,
+      interviewerId: updated.interviewerId,
+      answers: updated.answers,
+    });
+  }
   return json({ ok: true });
 }
 
@@ -227,6 +270,7 @@ serveFunction(FN, [
   route(FN, "POST", "", createInterview),
   route(FN, "GET", "/:id", getInterview),
   route(FN, "PUT", "/:id", saveInterview),
+  route(FN, "PUT", "/:id/answers", editCompletedInterview),
   route(FN, "POST", "/:id/complete", completeInterview),
   route(FN, "POST", "/:id/recording", uploadRecording),
   route(FN, "POST", "/:id/reset", resetInterview),

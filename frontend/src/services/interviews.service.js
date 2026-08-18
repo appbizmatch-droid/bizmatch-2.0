@@ -7,6 +7,9 @@ export const listAllInterviews = () => api.get('/founder-interviews');
 export const getFounderInterview = (id) => api.get(`/founder-interviews/${id}`);
 export const createFounderInterview = (founderId, meta) => api.post('/founder-interviews', { founderId, meta });
 export const saveFounderInterview = (id, payload) => api.put(`/founder-interviews/${id}`, payload);
+// Edits a COMPLETED interview's answers in place and re-scores the evidence
+// it produced (source_type='interview'), then recomputes DNA + matches.
+export const editCompletedInterviewAnswers = (id, payload) => api.put(`/founder-interviews/${id}/answers`, payload);
 export const completeFounderInterview = (id) => api.post(`/founder-interviews/${id}/complete`);
 export const deleteFounderInterview = (id) => api.delete(`/founder-interviews/${id}`);
 export const resetFounderInterview = (id) => api.post(`/founder-interviews/${id}/reset`);
