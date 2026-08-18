@@ -80,7 +80,14 @@ export default function FounderHeader({ founder, insights, evidenceCount, activi
         <Avatar photoUrl={founder?.photoUrl} name={founder?.name} size={isDesktop ? 76 : 88} C={C} />
         <View style={isDesktop ? { flex: 1 } : { alignItems: 'center' }}>
           {founder?.currentRole ? (
-            <Text style={[styles2.role, !isDesktop && { textAlign: 'center' }]}>{founder.currentRole}</Text>
+            // numberOfLines is required here, not cosmetic: at in-between
+            // window widths (above the mobile breakpoint but too narrow for
+            // the desktop stat-tile row's combined minWidth), this flex:1
+            // text container can get squeezed to just a few px wide. RN Web
+            // wraps unconstrained Text one character per line in that case
+            // (illegible vertical text) instead of truncating — this forces
+            // a graceful single-line ellipsis instead.
+            <Text style={[styles2.role, !isDesktop && { textAlign: 'center' }]} numberOfLines={1}>{founder.currentRole}</Text>
           ) : null}
           <View style={[styles2.metaRow, !isDesktop && { justifyContent: 'center' }]}>
             {founder?.industry ? (
@@ -168,7 +175,10 @@ function makeStyles(C) {
     cardDesktop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 24 },
 
     identity: { alignItems: 'center', gap: 12 },
-    identityDesktop: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    // minWidth stops this from being crushed toward 0 by the stat tiles'
+    // own minWidth under justify-content:space-between at in-between window
+    // widths — see the numberOfLines note on the role Text above.
+    identityDesktop: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 260 },
 
     role: { ...typography.titleMedium, color: C.textPrimary },
     metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 6 },

@@ -235,7 +235,7 @@ export default function FounderProfileScreen({ route, navigation }) {
               ) : (
                 <>
                   <View style={{ alignItems: 'center' }}>
-                    <RadarChart axes={axes} size={isDesktop ? 260 : 280} C={C} />
+                    <RadarChart axes={axes} size={isDesktop ? 260 : 220} C={C} />
                     <RadarSeriesLegend axes={axes} C={C} />
                   </View>
                   <RadarLegend axes={axes} C={C} />
@@ -556,7 +556,12 @@ export default function FounderProfileScreen({ route, navigation }) {
         />
 
         <View style={[styles.body, { marginTop: 20 }]}>
-          <WidgetStack pages={stackPages} height={480} C={C} />
+          {/* On mobile, ResponsiveRow stacks each page's side-by-side cards
+              into one column, so pages need much more vertical room than
+              on desktop — 480 was tuned for the desktop two-column layout
+              and clipped the radar chart (which needs ~220 + legend text)
+              stacked above the capability card on a single mobile column. */}
+          <WidgetStack pages={stackPages} height={isDesktop ? 480 : 820} C={C} />
         </View>
       </ScrollView>
     </AppShell>
