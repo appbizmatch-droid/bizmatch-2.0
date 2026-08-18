@@ -25,6 +25,16 @@ import { questionTree } from '../../interview/data/questionTree.bizmatch';
 const TREE = compileTree(questionTree);
 const DURATION_UNITS = ['minutes', 'hours', 'days', 'months', 'years'];
 
+// A question directed at the evaluator ("rate what they just described",
+// "did they take ownership...") rather than asked directly to the founder —
+// every such question in questionTree.bizmatch.ts uses an `evaluation.*`
+// summaryKey. Founders answering these audio-only would be confusing
+// ("who is 'they'?"), so the runner flags them for whoever's conducting
+// the interview (AUDIT: confusing founder/evaluator question phrasing).
+function isEvaluatorQuestion(question) {
+  return !!question?.summaryKey?.startsWith('evaluation.');
+}
+
 export default function InterviewRunnerScreen({ route, navigation }) {
   const darkMode = useAppStore(s => s.darkMode);
   const C = darkMode ? investorColors : colors;
@@ -444,6 +454,24 @@ export default function InterviewRunnerScreen({ route, navigation }) {
 
         {outlineOpen && (
           <View style={styles.outlinePanel}>
+          <View style={styles.outlineLegend}>
+            <View style={styles.outlineLegendItem}>
+              <Ionicons name="checkmark-circle" size={13} color={C.success} />
+              <Text style={styles.outlineLegendText}>Answered</Text>
+            </View>
+            <View style={styles.outlineLegendItem}>
+              <Ionicons name="remove-circle-outline" size={13} color={C.textHint} />
+              <Text style={styles.outlineLegendText}>Skipped</Text>
+            </View>
+            <View style={styles.outlineLegendItem}>
+              <Ionicons name="radio-button-on" size={13} color={C.primary} />
+              <Text style={styles.outlineLegendText}>Current</Text>
+            </View>
+            <View style={styles.outlineLegendItem}>
+              <Ionicons name="person-circle-outline" size={13} color={C.primary} />
+              <Text style={styles.outlineLegendText}>For evaluator</Text>
+            </View>
+          </View>
           <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {outlineGroups.map((group) => (
               <View key={group.sectionId} style={{ marginBottom: 10 }}>
@@ -470,6 +498,7 @@ export default function InterviewRunnerScreen({ route, navigation }) {
                       >
                         {substituteQuestionPlaceholders(q.text, meta || {})}
                       </Text>
+                      {isEvaluatorQuestion(q) && <Ionicons name="person-circle-outline" size={13} color={C.primary} />}
                     </TouchableOpacity>
                   );
                 })}
@@ -572,6 +601,12 @@ export default function InterviewRunnerScreen({ route, navigation }) {
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          {isEvaluatorQuestion(currentQuestion) && (
+            <View style={styles.audienceBadge}>
+              <Ionicons name="person-circle-outline" size={13} color={C.primary} />
+              <Text style={styles.audienceBadgeText}>This is a question for the evaluator</Text>
+            </View>
+          )}
           <Text style={styles.questionText}>{substituteQuestionPlaceholders(currentQuestion.text, meta || {})}</Text>
           {currentQuestion.helpText ? <Text style={styles.helpText}>{currentQuestion.helpText}</Text> : null}
 
@@ -749,8 +784,14 @@ function makeStyles(C) {
 
     outlinePanel: {
       backgroundColor: C.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: C.surfaceBorder,
-      marginTop: 10, padding: 12, maxHeight: 260, overflow: 'hidden',
+      marginTop: 10, padding: 12, maxHeight: 300, overflow: 'hidden',
     },
+    outlineLegend: {
+      flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingBottom: 10, marginBottom: 8,
+      borderBottomWidth: 1, borderBottomColor: C.surfaceBorder,
+    },
+    outlineLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    outlineLegendText: { ...typography.caption, color: C.textHint },
     outlineSectionLabel: { ...typography.caption, color: C.textHint, textTransform: 'uppercase', marginBottom: 4 },
     outlineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, paddingHorizontal: 4, borderRadius: radius.sm },
     outlineRowActive: { backgroundColor: C.surfaceElevated },
@@ -806,6 +847,12 @@ function makeStyles(C) {
     bookmarkQuestion: { ...typography.bodySmall, color: C.textSecondary, flex: 1 },
 
     scrollContent: { paddingVertical: 24, paddingBottom: 60 },
+    audienceBadge: {
+      flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
+      backgroundColor: `${C.primary}1A`,
+      borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 10,
+    },
+    audienceBadgeText: { ...typography.caption, color: C.primary, fontWeight: '700' },
     questionText: {
       ...typography.displayMedium, fontSize: 22, color: C.textPrimary, marginBottom: 8,
     },
