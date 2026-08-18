@@ -164,12 +164,9 @@ async function scoreInBackground(founderId: string, answers: Answers, dims: Evid
   try {
     if (dims.length === 0) {
       await query(
-        finished
-          ? "UPDATE founder_profiles SET dna_scoring_status = 'scored', dna_self_assessment_completed_at = now(), updated_at = now() WHERE user_id = $1"
-          : "UPDATE founder_profiles SET dna_scoring_status = 'scored', updated_at = now() WHERE user_id = $1",
+        "UPDATE founder_profiles SET dna_scoring_status = 'scored', updated_at = now() WHERE user_id = $1",
         [founderId],
       );
-      if (finished) await notifyDnaAssessmentComplete(founderId);
       return;
     }
     if (!isGeminiConfigured()) throw new Error("Gemini not configured");
@@ -199,14 +196,11 @@ async function scoreInBackground(founderId: string, answers: Answers, dims: Evid
     }
 
     await query(
-      finished
-        ? "UPDATE founder_profiles SET dna_scoring_status = 'scored', dna_self_assessment_completed_at = now(), updated_at = now() WHERE user_id = $1"
-        : "UPDATE founder_profiles SET dna_scoring_status = 'scored', updated_at = now() WHERE user_id = $1",
+      "UPDATE founder_profiles SET dna_scoring_status = 'scored', updated_at = now() WHERE user_id = $1",
       [founderId],
     );
     await recomputeFounderDna(founderId);
     await recomputeMatchesForFounder(founderId);
-    if (finished) await notifyDnaAssessmentComplete(founderId);
   } catch (e) {
     console.error("[dna-self-assessment] background scoring failed", e);
     await query(
@@ -236,6 +230,19 @@ async function submitAssessment(req: Request, params: Record<string, string>): P
   const founderId = params.founderId;
   const dims = answeredDimensions(answers);
 
+  // Onboarding answers the DNA step (step 5 of 7) before founder_profiles
+  // is created — that row only gets INSERTed at the very end, in the
+  // Finish step's updateFounderProfile call. Without this, every status
+  // UPDATE below silently affects 0 rows for a brand-new founder: the raw
+  // answers save fine (dna_self_assessment_responses.founder_id references
+  // users, which already exists), but dna_scoring_status/
+  // dna_self_assessment_completed_at never stick, so the "fill in your DNA
+  // assessment" prompt never clears even after finishing all 8 questions.
+  await query(
+    `INSERT INTO founder_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+    [founderId],
+  );
+
   for (const dim of DNA_DIMENSIONS) {
     if (!isAnswered(answers[dim])) continue;
     const { id: questionId, text: question } = DNA_QUESTIONS[dim];
@@ -248,10 +255,21 @@ async function submitAssessment(req: Request, params: Record<string, string>): P
     );
   }
 
+  // "Finished the questionnaire" and "AI finished scoring it" are separate
+  // facts — completed_at must be set here, synchronously, the moment the
+  // founder submits their last answer. Setting it only after a successful
+  // background Gemini call (the previous behavior) meant any scoring
+  // failure — missing API key, Gemini outage, bad output — permanently
+  // stranded the founder with a "fill in your DNA assessment" prompt that
+  // could never clear, even though they'd genuinely answered everything.
+  // dna_scoring_status tracks the AI side independently and can retry.
   await query(
-    "UPDATE founder_profiles SET dna_scoring_status = 'pending', updated_at = now() WHERE user_id = $1",
+    finished
+      ? "UPDATE founder_profiles SET dna_scoring_status = 'pending', dna_self_assessment_completed_at = now(), updated_at = now() WHERE user_id = $1"
+      : "UPDATE founder_profiles SET dna_scoring_status = 'pending', updated_at = now() WHERE user_id = $1",
     [founderId],
   );
+  if (finished) background(notifyDnaAssessmentComplete(founderId));
 
   background(scoreInBackground(founderId, answers, dims, finished));
 
