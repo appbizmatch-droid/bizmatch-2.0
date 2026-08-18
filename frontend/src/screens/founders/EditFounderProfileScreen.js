@@ -1,11 +1,12 @@
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity, Image,
   StyleSheet, ScrollView, ActivityIndicator, Platform, Linking,
 } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { showAlert } from '../../services/alert';
 import useAuthStore from '../../store/authStore';
 import useAppStore from '../../store/appStore';
@@ -15,6 +16,7 @@ import {
   updatePartnerRequirements, updateDealBreakers, CAPABILITIES,
   uploadFounderCv, uploadFounderCvWeb,
 } from '../../services/founders.service';
+import { uploadPhoto } from '../../services/auth.service';
 import AppShell from '../../components/AppShell';
 import CapabilityPriorityList from '../../components/founder/CapabilityPriorityList';
 import { ADMIN_NAV_ITEMS, FOUNDER_NAV_ITEMS } from '../../config/nav';
@@ -113,12 +115,53 @@ export default function EditFounderProfileScreen({ route, navigation }) {
 
   const founderId = route.params?.founderId || currentUser?.id;
   const isAdmin = currentUser?.role === 'admin';
+  const isSelf = founderId === currentUser?.id;
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : FOUNDER_NAV_ITEMS;
   const activeNav = isAdmin ? 'founders' : 'home';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // FND-07: photo upload previously only existed in Account Settings, which
+  // isn't where a founder editing their own profile would look for it —
+  // /users/me/photo always targets the caller's own account, so this only
+  // renders when editing your own profile (isSelf), not an admin editing
+  // someone else's.
+  const [photoUrl, setPhotoUrl] = useState(currentUser?.photoUrl || currentUser?.photo_url || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const updateUser = useAuthStore(s => s.updateUser);
+
+  const handlePickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showAlert('Error', 'Photo library access is needed to change your picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+
+    const asset = result.assets[0];
+    const mimeType = asset.mimeType || 'image/jpeg';
+    const dataUri = `data:${mimeType};base64,${asset.base64}`;
+
+    setPhotoUploading(true);
+    try {
+      const { data } = await uploadPhoto(dataUri);
+      setPhotoUrl(data.photo_url);
+      updateUser({ ...currentUser, photoUrl: data.photo_url, photo_url: data.photo_url });
+    } catch (err) {
+      showAlert('Error', err.response?.data?.error || 'Could not upload photo.');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
 
   const [basics, setBasics] = useState({ role_title: '', venture_name: '', industry: '', location: '', current_stage: '' });
   const [commitment, setCommitment] = useState({ commitment_hours: '', commitment_type: '', commitment_risk_appetite: '' });
@@ -278,6 +321,28 @@ export default function EditFounderProfileScreen({ route, navigation }) {
           </TouchableOpacity>
           <Text style={styles.pageTitle}>Edit Profile</Text>
         </View>
+
+        {isSelf ? (
+          <SectionCard title="Photo" icon="camera-outline" C={C} style={styles.card}>
+            <View style={styles.photoRow}>
+              <TouchableOpacity onPress={handlePickPhoto} disabled={photoUploading} activeOpacity={0.8}>
+                {photoUrl ? (
+                  <Image source={{ uri: photoUrl }} style={styles.photo} />
+                ) : (
+                  <View style={[styles.photo, styles.photoPlaceholder]}>
+                    <Text style={styles.photoPlaceholderText}>{currentUser?.name ? currentUser.name[0].toUpperCase() : '?'}</Text>
+                  </View>
+                )}
+                {photoUploading ? (
+                  <View style={styles.photoOverlay}><ActivityIndicator color="#fff" /></View>
+                ) : null}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handlePickPhoto} disabled={photoUploading}>
+                <Text style={styles.changePhotoText}>{photoUrl ? 'Change photo' : 'Add photo'}</Text>
+              </TouchableOpacity>
+            </View>
+          </SectionCard>
+        ) : null}
 
         <SectionCard title="Basics" icon="person-outline" C={C} style={styles.card}>
           <Text style={styles.fieldLabel}>ROLE / BACKGROUND</Text>
@@ -461,6 +526,16 @@ function makeStyles(C) {
     // gap between cards — scoped to this screen only, since this form stacks
     // six cards in a row and the default spacing made it feel oversized.
     card: { marginBottom: 12, padding: 14 },
+
+    photoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    photo: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.surfaceElevated },
+    photoPlaceholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: C.primary },
+    photoPlaceholderText: { color: '#fff', fontSize: 24, fontWeight: '800' },
+    photoOverlay: {
+      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 32,
+      backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center',
+    },
+    changePhotoText: { color: C.primary, ...typography.labelLarge, fontWeight: '700' },
 
     fieldLabel: { ...typography.labelSmall, color: C.textSecondary, marginBottom: 6, marginTop: 10, textTransform: 'uppercase' },
     helperText: { ...typography.caption, color: C.textHint, marginTop: 8 },
