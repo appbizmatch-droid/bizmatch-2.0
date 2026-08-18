@@ -587,6 +587,23 @@ function CompareMyMatches({ myMatches, selectedMatchIds, onToggleSelect, onCompa
     return <Text style={styles.emptyText}>No matches at {MATCH_SUGGEST_THRESHOLD}%+ compatibility yet — check back as more founders join.</Text>;
   }
 
+  // Comparing needs two candidates. With only one qualifying match, a disabled
+  // "Compare Selected" button just looks broken — show the match with an
+  // explanation instead of an inert button (AUDIT-item: compare button "doesn't work").
+  if (myMatches.length === 1) {
+    const m = myMatches[0];
+    return (
+      <View>
+        <View style={styles.matchSelectRow}>
+          <Avatar photoUrl={m.photoUrl} name={m.name} size={36} C={C} />
+          <Text style={[styles.participantName, { flex: 1, marginLeft: 10 }]}>{m.name || 'Unnamed'}</Text>
+          <Pill label={`${m.score}%`} C={C} bg={C.successLight} color={C.success} />
+        </View>
+        <Text style={styles.compareHint}>You need at least two matches at {MATCH_SUGGEST_THRESHOLD}%+ to compare — check back as more founders join.</Text>
+      </View>
+    );
+  }
+
   return (
     <View>
       <Text style={styles.compareHint}>Pick two of your matches ({MATCH_SUGGEST_THRESHOLD}%+) to compare side by side.</Text>
