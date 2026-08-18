@@ -133,6 +133,45 @@ export const FoundersModel = {
     };
   },
 
+  // Safe preview of a match candidate for the OTHER founder in the pair —
+  // self-reported fields only (what they filled in about themselves), never
+  // evaluator-authored evidence/notes or compatibility explanations, which
+  // are confidential. Only callable when a computed compatibility row
+  // already links the two founders (see the route handler).
+  async getMatchPreview(founderId: string): Promise<Record<string, unknown> | null> {
+    const rows = await query<Record<string, unknown>>(
+      `SELECT u.name, u.photo_url,
+              fp.role_title, fp.venture_name, fp.industry, fp.location, fp.current_stage,
+              fp.commitment_hours, fp.commitment_type, fp.commitment_risk_appetite
+       FROM users u
+       LEFT JOIN founder_profiles fp ON fp.user_id = u.id
+       WHERE u.id = $1 AND u.deleted_at IS NULL`,
+      [founderId],
+    );
+    const base = rows[0];
+    if (!base) return null;
+
+    const capabilities = await query<Record<string, unknown>>(
+      `SELECT kind, capability, score FROM founder_capabilities WHERE founder_id = $1 ORDER BY kind, score DESC`,
+      [founderId],
+    );
+
+    return {
+      name: base.name,
+      photoUrl: base.photo_url,
+      currentRole: base.role_title,
+      ventureName: base.venture_name,
+      industry: base.industry,
+      location: base.location,
+      currentStage: base.current_stage,
+      commitmentHours: base.commitment_hours,
+      commitmentType: base.commitment_type,
+      commitmentRiskAppetite: base.commitment_risk_appetite,
+      provides: capabilities.filter((c) => c.kind === "provide"),
+      needs: capabilities.filter((c) => c.kind === "need"),
+    };
+  },
+
   async upsertProfile(founderId: string, fields: Record<string, unknown>): Promise<void> {
     const {
       role_title, venture_name, industry, location, current_stage,

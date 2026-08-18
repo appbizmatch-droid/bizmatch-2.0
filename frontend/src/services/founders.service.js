@@ -11,6 +11,10 @@ export const listPrograms = () => api.get('/founders/programs');
 
 // Founder Profile (MVP screen 4) — admin or self
 export const getFounder = (founderId) => api.get(`/founders/${founderId}`);
+// Self-reported preview of a match candidate — a founder can call this for
+// anyone already surfaced as one of their matches (see the backend's
+// founder_compatibility check); it never includes evaluator-authored data.
+export const getMatchPreview = (founderId) => api.get(`/founders/${founderId}/match-preview`);
 export const updateFounderProfile = (founderId, payload) => api.put(`/founders/${founderId}/profile`, payload);
 export const updateFounderCapabilities = (founderId, kind, items) =>
   api.put(`/founders/${founderId}/capabilities`, { kind, items });

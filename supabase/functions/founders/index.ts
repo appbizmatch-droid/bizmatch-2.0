@@ -152,6 +152,30 @@ async function getFounder(req: Request, params: Record<string, string>): Promise
   return json(profile);
 }
 
+// GET /functions/v1/founders/:id/match-preview  (self, if a compatibility
+// row already links the caller and :id — i.e. only for a founder you're
+// already shown as a match candidate for). Self-reported fields only, no
+// evaluator-authored evidence or compatibility explanation — a founder
+// browsing their matches should see what the candidate says about
+// themselves, not confidential evaluator notes about them.
+async function getMatchPreview(req: Request, params: Record<string, string>): Promise<Response> {
+  const user = await authenticate(req);
+  if (!user) return json({ error: "Unauthorized" }, 401);
+  if (user.role !== "admin") {
+    if (user.id === params.id) return json({ error: "Forbidden" }, 403);
+    const [aId, bId] = user.id < params.id ? [user.id, params.id] : [params.id, user.id];
+    const rows = await query<{ exists: boolean }>(
+      `SELECT EXISTS(SELECT 1 FROM founder_compatibility WHERE founder_a_id = $1 AND founder_b_id = $2) AS exists`,
+      [aId, bId],
+    );
+    if (!rows[0]?.exists) return json({ error: "Forbidden" }, 403);
+  }
+
+  const preview = await FoundersModel.getMatchPreview(params.id);
+  if (!preview) return json({ error: "Founder not found" }, 404);
+  return json(preview);
+}
+
 // PUT /functions/v1/founders/:id/profile  (admin or self)
 async function putProfile(req: Request, params: Record<string, string>): Promise<Response> {
   const user = await authenticate(req);
@@ -304,6 +328,7 @@ serveFunction(FN, [
   route(FN, "POST", "/prospect", createProspect),
   route(FN, "GET", "", listFounders),
   route(FN, "GET", "/:id", getFounder),
+  route(FN, "GET", "/:id/match-preview", getMatchPreview),
   route(FN, "PUT", "/:id/profile", putProfile),
   route(FN, "PUT", "/:id/capabilities", putCapabilities),
   route(FN, "PUT", "/:id/partner-requirements", putPartnerRequirements),

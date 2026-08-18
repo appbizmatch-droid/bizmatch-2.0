@@ -1,15 +1,15 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Linking,
+  StyleSheet, ActivityIndicator, Linking, Modal,
 } from 'react-native';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../services/alert';
 import useAuthStore from '../../store/authStore';
 import useAppStore from '../../store/appStore';
 import { colors, investorColors, radius, typography, cardShadow } from '../../theme';
-import { getFounder, getFounderInsights, listEvidence, setFounderStatus, DIMENSIONS, DIMENSION_LABELS } from '../../services/founders.service';
+import { getFounder, getFounderInsights, listEvidence, setFounderStatus, getMatchPreview, DIMENSIONS, DIMENSION_LABELS } from '../../services/founders.service';
 import { listActivities, ACTIVITY_TYPE_LABELS, formatActivityDateRange } from '../../services/activities.service';
 import { getTopPairs, getTopMatches, compareFounders } from '../../services/matches.service';
 import { listFounderInterviews, deleteFounderInterview } from '../../services/interviews.service';
@@ -580,6 +580,8 @@ export default function FounderProfileScreen({ route, navigation }) {
 // another candidate. Fetches compareFounders(me, candidate) once per selected match so each side
 // shows the founder's own compatibility with that specific candidate.
 function CompareMyMatches({ myMatches, selectedMatchIds, onToggleSelect, onCompare, comparing, compareResult, founderId, C, styles }) {
+  const [previewId, setPreviewId] = useState(null);
+
   if (myMatches === null) {
     return <View style={styles.centered}><ActivityIndicator color={C.primary} /></View>;
   }
@@ -594,35 +596,36 @@ function CompareMyMatches({ myMatches, selectedMatchIds, onToggleSelect, onCompa
     const m = myMatches[0];
     return (
       <View>
-        <View style={styles.matchSelectRow}>
+        <TouchableOpacity style={styles.matchSelectRow} onPress={() => setPreviewId(m.founderId)} activeOpacity={0.75}>
           <Avatar photoUrl={m.photoUrl} name={m.name} size={36} C={C} />
           <Text style={[styles.participantName, { flex: 1, marginLeft: 10 }]}>{m.name || 'Unnamed'}</Text>
           <Pill label={`${m.score}%`} C={C} bg={C.successLight} color={C.success} />
-        </View>
+        </TouchableOpacity>
         <Text style={styles.compareHint}>You need at least two matches at {MATCH_SUGGEST_THRESHOLD}%+ to compare — check back as more founders join.</Text>
+        <MatchPreviewModal founderId={previewId} onClose={() => setPreviewId(null)} C={C} styles={styles} />
       </View>
     );
   }
 
   return (
     <View>
-      <Text style={styles.compareHint}>Pick two of your matches ({MATCH_SUGGEST_THRESHOLD}%+) to compare side by side.</Text>
+      <Text style={styles.compareHint}>Pick two of your matches ({MATCH_SUGGEST_THRESHOLD}%+) to compare side by side, or tap a name to see what they shared about themselves.</Text>
       {myMatches.map((m) => {
         const selected = selectedMatchIds.includes(m.founderId);
         return (
-          <TouchableOpacity
-            key={m.founderId}
-            style={[styles.matchSelectRow, selected && styles.matchSelectRowActive]}
-            onPress={() => onToggleSelect(m.founderId)}
-            activeOpacity={0.75}
-          >
-            <View style={[styles.checkbox, selected && styles.checkboxChecked]} />
-            <Avatar photoUrl={m.photoUrl} name={m.name} size={36} C={C} />
-            <Text style={[styles.participantName, { flex: 1, marginLeft: 10 }]}>{m.name || 'Unnamed'}</Text>
+          <View key={m.founderId} style={[styles.matchSelectRow, selected && styles.matchSelectRowActive]}>
+            <TouchableOpacity onPress={() => onToggleSelect(m.founderId)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <View style={[styles.checkbox, selected && styles.checkboxChecked]} />
+            </TouchableOpacity>
+            <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={() => setPreviewId(m.founderId)} activeOpacity={0.75}>
+              <Avatar photoUrl={m.photoUrl} name={m.name} size={36} C={C} />
+              <Text style={[styles.participantName, { flex: 1, marginLeft: 10 }]}>{m.name || 'Unnamed'}</Text>
+            </TouchableOpacity>
             <Pill label={`${m.score}%`} C={C} bg={C.successLight} color={C.success} />
-          </TouchableOpacity>
+          </View>
         );
       })}
+      <MatchPreviewModal founderId={previewId} onClose={() => setPreviewId(null)} C={C} styles={styles} />
 
       <TouchableOpacity
         style={[styles.btnPrimary, (selectedMatchIds.length !== 2 || comparing) && styles.btnDisabled]}
@@ -672,6 +675,70 @@ function CompareResultCard({ detail, founderId, C, styles }) {
   );
 }
 
+// Self-reported preview of a match candidate — deliberately shows only what
+// getMatchPreview returns (name/role/venture/industry/location/stage/
+// commitment/provides/needs), never evaluator-authored evidence or the
+// compatibility explanation, which stay confidential to the evaluator.
+function MatchPreviewModal({ founderId, onClose, C, styles }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!founderId) { setData(null); return; }
+    setData(null);
+    setLoading(true);
+    getMatchPreview(founderId)
+      .then(({ data }) => setData(data))
+      .catch(() => setData({}))
+      .finally(() => setLoading(false));
+  }, [founderId]);
+
+  if (!founderId) return null;
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.previewOverlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity style={styles.previewCard} activeOpacity={1} onPress={() => {}}>
+          {loading || !data ? (
+            <View style={styles.centered}><ActivityIndicator color={C.primary} /></View>
+          ) : (
+            <>
+              <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                <Avatar photoUrl={data.photoUrl} name={data.name} size={56} C={C} />
+                <Text style={[styles.compareCardName, { marginTop: 8 }]}>{data.name || 'Unnamed'}</Text>
+                {!!data.currentRole && <Text style={styles.compareHint}>{data.currentRole}</Text>}
+              </View>
+              {!!data.ventureName && <Text style={styles.previewLine}><Text style={styles.previewLabel}>Venture: </Text>{data.ventureName}</Text>}
+              {!!data.industry && <Text style={styles.previewLine}><Text style={styles.previewLabel}>Industry: </Text>{data.industry}</Text>}
+              {!!data.location && <Text style={styles.previewLine}><Text style={styles.previewLabel}>Location: </Text>{data.location}</Text>}
+              {!!data.currentStage && <Text style={styles.previewLine}><Text style={styles.previewLabel}>Stage: </Text>{data.currentStage}</Text>}
+              {!!data.commitmentType && <Text style={styles.previewLine}><Text style={styles.previewLabel}>Commitment: </Text>{data.commitmentType}{data.commitmentHours ? ` · ${data.commitmentHours}h/wk` : ''}</Text>}
+              {data.provides?.length > 0 && (
+                <>
+                  <Text style={[styles.previewLabel, { marginTop: 10 }]}>Provides</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {data.provides.map((c) => <Pill key={c.capability} label={c.capability} C={C} bg={C.primaryLight} color={C.primary} />)}
+                  </View>
+                </>
+              )}
+              {data.needs?.length > 0 && (
+                <>
+                  <Text style={[styles.previewLabel, { marginTop: 10 }]}>Needs</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {data.needs.map((c) => <Pill key={c.capability} label={c.capability} C={C} bg={C.warningLight} color={C.warning} />)}
+                  </View>
+                </>
+              )}
+              <TouchableOpacity style={[styles.btnPrimary, { marginTop: 16 }]} onPress={onClose} activeOpacity={0.85}>
+                <Text style={styles.btnPrimaryText}>Close</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
 
 function makeStyles(C) {
   return StyleSheet.create({
@@ -711,6 +778,16 @@ function makeStyles(C) {
     checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: C.surfaceBorder },
     checkboxChecked: { backgroundColor: C.primary, borderColor: C.primary },
     participantName: { ...typography.bodyMedium, color: C.textPrimary },
+
+    previewOverlay: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20,
+    },
+    previewCard: {
+      width: '100%', maxWidth: 380, backgroundColor: C.surface, borderRadius: radius.lg,
+      padding: 20, ...cardShadow,
+    },
+    previewLine: { ...typography.bodyMedium, color: C.textPrimary, marginTop: 6 },
+    previewLabel: { ...typography.bodySmall, color: C.textSecondary, fontWeight: '700' },
 
     compareResultRow: { flexDirection: 'row', gap: 12, marginTop: 20, flexWrap: 'wrap' },
     compareCard: {
