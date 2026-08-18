@@ -1,31 +1,17 @@
 {
   "name": "bizmatch-backend",
   "version": "1.0.0",
-  "description": "BizMatch backend API - matchmaking platform for entrepreneurs and investors",
-  "main": "server.js",
+  "description": "BizMatch backend support scripts — Supabase migrations, seeding, and e2e tests. The API itself lives in supabase/functions (Edge Functions); there is no Node server here.",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "migrate": "npx supabase db push",
-    "seed": "node scripts/seed.js"
+    "migrate": "npx supabase db push"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.111.0",
-    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "express-rate-limit": "^7.1.5",
-    "express-validator": "^7.0.1",
-    "helmet": "^7.1.0",
-    "multer": "^1.4.5-lts.1",
-    "pg": "^8.22.0",
-    "uuid": "^9.0.0",
-    "winston": "^3.11.0"
+    "pg": "^8.22.0"
   },
   "devDependencies": {
     "eslint": "^10.4.1",
-    "globals": "^17.6.0",
-    "nodemon": "^3.0.2"
+    "globals": "^17.6.0"
   }
 }
