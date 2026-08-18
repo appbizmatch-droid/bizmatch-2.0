@@ -15,6 +15,8 @@ const TYPE_ICON = {
   assessment_requested:  '📝',
   match_ready:           '🤝',
   deal_breaker_flagged:  '⚠️',
+  team_joined:           '👥',
+  activity_added:        '📅',
 };
 
 const TYPE_LABEL = {
@@ -22,6 +24,8 @@ const TYPE_LABEL = {
   assessment_requested:  'Evaluation Requested',
   match_ready:           'New Match Suggestion',
   deal_breaker_flagged:  'Deal Breaker Flagged',
+  team_joined:           'Added to a Team',
+  activity_added:        'Added to an Activity',
 };
 
 function formatTime(dateStr) {
@@ -39,6 +43,8 @@ const TYPE_BODY = {
   assessment_requested:  (p) => p?.founderName ? `Evaluation requested for ${p.founderName}.` : 'An evaluation was requested.',
   match_ready:           (p) => p?.founderName ? `New match suggestion with ${p.founderName}.` : 'A new match suggestion is ready.',
   deal_breaker_flagged:  (p) => p?.detail || 'A potential deal breaker needs review.',
+  team_joined:           (p) => p?.teamName ? `You've been added to ${p.teamName}.` : "You've been added to a team.",
+  activity_added:        () => "You've been added to an activity.",
 };
 
 // Realtime rows come back snake_case (raw DB columns); the REST API returns
@@ -67,7 +73,13 @@ export default function NotificationBell({ tintColor }) {
     useAppStore.getState().showBanner({
       title: TYPE_LABEL[n.type] || 'New Notification',
       body: (TYPE_BODY[n.type] || (() => ''))(n.payload),
-      data: { type: n.type, refId: n.refId, founderId: n.payload?.founderId },
+      data: {
+        type: n.type,
+        refId: n.refId,
+        founderId: n.payload?.founderId,
+        activityId: n.payload?.activityId,
+        teamId: n.payload?.teamId,
+      },
     });
   }, []);
 
@@ -143,10 +155,14 @@ export default function NotificationBell({ tintColor }) {
       navigation.navigate('FounderProfile', { founderId: item.payload.founderId });
       return;
     }
-    // assessment_requested carries the activity id instead (no founder yet —
-    // it's a request to go evaluate participants on that activity).
-    if (item.type === 'assessment_requested' && item.payload?.activityId) {
+    // assessment_requested and activity_added both carry the activity id
+    // instead (no founder yet — they're about the activity itself).
+    if ((item.type === 'assessment_requested' || item.type === 'activity_added') && item.payload?.activityId) {
       navigation.navigate('ActivityDetail', { activityId: item.payload.activityId });
+      return;
+    }
+    if (item.type === 'team_joined' && item.payload?.teamId) {
+      navigation.navigate('TeamProfile', { teamId: item.payload.teamId });
     }
   };
 

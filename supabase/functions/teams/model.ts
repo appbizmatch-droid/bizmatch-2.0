@@ -131,11 +131,19 @@ export const TeamsModel = {
     return teamId;
   },
 
-  async setMembers(teamId: number, founderIds: string[]): Promise<void> {
+  // Returns the founderIds newly added by this call (present in `founderIds`
+  // but not previously on the team) so the caller can notify just them.
+  async setMembers(teamId: number, founderIds: string[]): Promise<string[]> {
+    const before = await query<{ founder_id: string }>(
+      "SELECT founder_id FROM team_founders WHERE team_id = $1",
+      [teamId],
+    );
+    const beforeIds = new Set(before.map((r) => r.founder_id));
     await query("DELETE FROM team_founders WHERE team_id = $1", [teamId]);
     for (const founderId of founderIds) {
       await query(`INSERT INTO team_founders (team_id, founder_id) VALUES ($1, $2)`, [teamId, founderId]);
     }
+    return founderIds.filter((id) => !beforeIds.has(id));
   },
 
   async remove(teamId: number): Promise<void> {

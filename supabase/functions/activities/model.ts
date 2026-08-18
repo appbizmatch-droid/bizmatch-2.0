@@ -176,7 +176,7 @@ export const ActivitiesModel = {
   // status, silently flipping rejected requests back to approved on every
   // save). founderIds is the desired set of approved participants; anyone
   // currently pending/rejected and not in this set is left untouched.
-  async setParticipants(activityId: number, founderIds: string[]): Promise<void> {
+  async setParticipants(activityId: number, founderIds: string[]): Promise<string[]> {
     const desired = new Set(founderIds);
     const current = await query<{ founder_id: string }>(
       `SELECT founder_id FROM activity_participants WHERE activity_id = $1 AND status = 'approved'`,
@@ -201,6 +201,7 @@ export const ActivitiesModel = {
         [activityId, founderId],
       );
     }
+    return toAdd;
   },
 
   // Founder self-service: request to join an upcoming activity. Idempotent —

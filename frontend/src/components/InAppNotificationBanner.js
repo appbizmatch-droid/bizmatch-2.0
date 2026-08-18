@@ -9,6 +9,8 @@ const TYPE_ICON = {
   assessment_requested:  '📝',
   match_ready:           '🤝',
   deal_breaker_flagged:  '⚠️',
+  team_joined:           '👥',
+  activity_added:        '📅',
 };
 
 const DISMISS_AFTER_MS = 4500;
@@ -56,6 +58,14 @@ export default function InAppNotificationBanner() {
     dismissBanner();
     if (banner?.data?.founderId) {
       navigation.navigate('FounderProfile', { founderId: banner.data.founderId });
+      return;
+    }
+    if ((banner?.data?.type === 'assessment_requested' || banner?.data?.type === 'activity_added') && banner?.data?.activityId) {
+      navigation.navigate('ActivityDetail', { activityId: banner.data.activityId });
+      return;
+    }
+    if (banner?.data?.type === 'team_joined' && banner?.data?.teamId) {
+      navigation.navigate('TeamProfile', { teamId: banner.data.teamId });
     }
   };
 

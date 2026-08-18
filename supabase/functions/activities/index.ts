@@ -125,7 +125,11 @@ async function setParticipants(req: Request, params: Record<string, string>): Pr
 
   const body = await req.json().catch(() => ({}));
   const { founderIds } = body as { founderIds?: string[] };
-  await ActivitiesModel.setParticipants(Number(params.id), founderIds ?? []);
+  const activityId = Number(params.id);
+  const added = await ActivitiesModel.setParticipants(activityId, founderIds ?? []);
+  for (const founderId of added) {
+    background(emitNotification(founderId, "activity_added", activityId, { activityId }));
+  }
   return json({ ok: true });
 }
 

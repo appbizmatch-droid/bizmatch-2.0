@@ -4,6 +4,7 @@ import { route } from "../_shared/router.ts";
 import { serveFunction } from "../_shared/serve.ts";
 import { background } from "../_shared/background.ts";
 import { computeTeamInsights, previewTeamProfile, recomputeTeamDna } from "../_shared/teamRecompute.ts";
+import { emitNotification } from "../_shared/notifications.ts";
 import { TeamsModel } from "./model.ts";
 
 const FN = "teams";
@@ -60,6 +61,9 @@ async function createTeam(req: Request): Promise<Response> {
     return json({ error: err instanceof Error ? err.message : "Could not create team" }, 409);
   }
   background(recomputeTeamDna(teamId));
+  background(Promise.all(
+    founderIds.map((founderId) => emitNotification(founderId, "team_joined", teamId, { teamId, teamName: name })),
+  ));
   return json({ id: teamId }, 201);
 }
 
@@ -87,8 +91,14 @@ async function setMembers(req: Request, params: Record<string, string>): Promise
   const body = await req.json().catch(() => ({}));
   const { founderIds } = body as { founderIds?: string[] };
   const teamId = Number(params.id);
-  await TeamsModel.setMembers(teamId, founderIds ?? []);
+  const added = await TeamsModel.setMembers(teamId, founderIds ?? []);
   background(recomputeTeamDna(teamId));
+  if (added.length > 0) {
+    const team = await TeamsModel.get(teamId);
+    background(Promise.all(
+      added.map((founderId) => emitNotification(founderId, "team_joined", teamId, { teamId, teamName: team?.name })),
+    ));
+  }
   return json({ ok: true });
 }
 
