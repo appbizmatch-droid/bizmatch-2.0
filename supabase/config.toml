@@ -183,7 +183,7 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "https://matchappbiz.netlify.app"
+site_url = "https://bizmatch-2-0.vercel.app"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
@@ -193,7 +193,7 @@ site_url = "https://matchappbiz.netlify.app"
 # works when testing against this linked project.
 additional_redirect_urls = [
   "https://matchappbiz.netlify.app",
-  "https://matchappbiz.netlify.app/reset-password",
+  "https://bizmatch-2-0.vercel.app",
   "bizmatch://reset-password",
   "bizmatch://auth-callback",
   "http://127.0.0.1:3000",
@@ -266,9 +266,9 @@ enable_confirmations = false
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+max_frequency = "1m0s"
 # Number of characters used in the email OTP.
-otp_length = 6
+otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
@@ -339,8 +339,8 @@ max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
