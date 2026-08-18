@@ -108,14 +108,17 @@ export default function FounderProfileScreen({ route, navigation }) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   useFocusEffect(useCallback(() => {
-    if (isAdmin) return;
+    // FND-08: skip the fetch entirely once team status is known, not just
+    // the render — a founder already on a team shouldn't be pulled into
+    // new-partner matching at all.
+    if (isAdmin || founder?.team) return;
     setMyMatches(null);
     setSelectedMatchIds([]);
     setCompareResult(null);
     getTopMatches(founderId, 50)
       .then(({ data }) => setMyMatches(data.filter(m => m.score >= MATCH_SUGGEST_THRESHOLD)))
       .catch(() => setMyMatches([]));
-  }, [isAdmin, founderId]));
+  }, [isAdmin, founderId, founder?.team]));
 
   const toggleSelectedMatch = (id) => {
     setCompareResult(null);
@@ -399,7 +402,10 @@ export default function FounderProfileScreen({ route, navigation }) {
         </SectionCard>
       ),
     },
-    {
+    // FND-08: a founder already placed on a team (whether matched-in or on a
+    // prebuilt/pre-formed startup) shouldn't be shopping for new partners —
+    // admins still get the full matches tool regardless of team status.
+    (isAdmin || !founder?.team) && {
       key: 'matches', label: 'Matches',
       node: (
         <SectionCard
