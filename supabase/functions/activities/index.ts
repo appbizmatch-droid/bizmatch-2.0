@@ -133,6 +133,17 @@ async function setParticipants(req: Request, params: Record<string, string>): Pr
   return json({ ok: true });
 }
 
+// GET /functions/v1/activities/evaluator-candidates  (admin) — every admin/
+// evaluator account, for the evaluator-assignment picker.
+async function listEvaluatorCandidates(req: Request): Promise<Response> {
+  const user = await authenticate(req);
+  if (!user) return json({ error: "Unauthorized" }, 401);
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+
+  return json(await ActivitiesModel.listEvaluatorCandidates());
+}
+
 // PUT /functions/v1/activities/:id/evaluators  (admin)  { evaluatorIds: string[] }
 async function setEvaluators(req: Request, params: Record<string, string>): Promise<Response> {
   const user = await authenticate(req);
@@ -164,6 +175,7 @@ async function deleteActivity(req: Request, params: Record<string, string>): Pro
 serveFunction(FN, [
   route(FN, "GET", "", listActivities),
   route(FN, "POST", "", createActivity),
+  route(FN, "GET", "/evaluator-candidates", listEvaluatorCandidates),
   route(FN, "GET", "/:id", getActivity),
   route(FN, "PATCH", "/:id", updateActivity),
   route(FN, "POST", "/:id/register", registerForActivity),

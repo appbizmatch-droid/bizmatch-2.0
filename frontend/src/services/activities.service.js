@@ -9,6 +9,7 @@ export const setActivityParticipants = (activityId, founderIds) =>
   api.put(`/activities/${activityId}/participants`, { founderIds });
 export const setActivityEvaluators = (activityId, evaluatorIds) =>
   api.put(`/activities/${activityId}/evaluators`, { evaluatorIds });
+export const listEvaluatorCandidates = () => api.get('/activities/evaluator-candidates');
 export const deleteActivity = (activityId) => api.delete(`/activities/${activityId}`);
 
 // Registration — founder requests to join an upcoming activity; admin approves/rejects.

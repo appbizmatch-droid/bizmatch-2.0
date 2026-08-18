@@ -29,6 +29,16 @@ const STATUS_SQL = `
 `;
 
 export const ActivitiesModel = {
+  // Candidates for the evaluator-assignment picker — every admin/evaluator
+  // account in the cohort. setEvaluators() itself works with any valid user
+  // id, but the UI needs a list to check boxes against.
+  async listEvaluatorCandidates(): Promise<{ id: string; name: string | null }[]> {
+    const rows = await query<{ id: string; name: string | null }>(
+      "SELECT id, name FROM users WHERE role = 'admin' ORDER BY name",
+    );
+    return rows;
+  },
+
   // MVP screen 5 — Activities list: type, date, participant count, status.
   // Also backs MVP screen 10's "Team Activities" via the teamId filter.
   // Admin-only view — sees every activity regardless of participation.

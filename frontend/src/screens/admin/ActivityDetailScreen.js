@@ -16,6 +16,7 @@ import { colors, investorColors, radius, cardShadow, typography } from '../../th
 import {
   getActivity, createActivity, updateActivity, setActivityParticipants,
   registerForActivity, decideActivityParticipant, deleteActivity,
+  setActivityEvaluators, listEvaluatorCandidates,
   ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, formatActivityDateRange,
 } from '../../services/activities.service';
 import { listFounders, DIMENSIONS, DIMENSION_LABELS } from '../../services/founders.service';
@@ -144,6 +145,13 @@ export default function ActivityDetailScreen({ route, navigation }) {
   const [peerFeedbackByFounder, setPeerFeedbackByFounder] = useState({});
   const [deleting, setDeleting] = useState(false);
 
+  // Evaluator assignment (admin) — setActivityEvaluators existed with a working
+  // backend route but no screen ever called it, so this was previously
+  // impossible to do from the UI.
+  const [managingEvaluators, setManagingEvaluators] = useState(false);
+  const [evaluatorCandidates, setEvaluatorCandidates] = useState([]);
+  const [selectedEvaluatorIds, setSelectedEvaluatorIds] = useState(new Set());
+
   const load = useCallback(async () => {
     if (!activityId) return;
     setLoading(true);
@@ -152,6 +160,7 @@ export default function ActivityDetailScreen({ route, navigation }) {
       setActivity(data);
       const approvedIds = (data.participants || []).filter(p => p.status === 'approved').map(p => p.id);
       setSelectedFounderIds(new Set(approvedIds));
+      setSelectedEvaluatorIds(new Set((data.evaluators || []).map(e => e.id)));
 
       if (isAdmin && approvedIds.length > 0) {
         const results = await Promise.all(approvedIds.map(id =>
@@ -254,6 +263,37 @@ export default function ActivityDetailScreen({ route, navigation }) {
       load();
     } catch (err) {
       showAlert('Error', err.response?.data?.error || 'Could not update participants.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEvaluatorManager = async () => {
+    setManagingEvaluators(true);
+    if (evaluatorCandidates.length === 0) {
+      try {
+        const { data } = await listEvaluatorCandidates();
+        setEvaluatorCandidates(data);
+      } catch { /* silent */ }
+    }
+  };
+
+  const toggleEvaluator = (id) => {
+    setSelectedEvaluatorIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const saveEvaluators = async () => {
+    setSaving(true);
+    try {
+      await setActivityEvaluators(activityId, [...selectedEvaluatorIds]);
+      setManagingEvaluators(false);
+      load();
+    } catch (err) {
+      showAlert('Error', err.response?.data?.error || 'Could not update evaluators.');
     } finally {
       setSaving(false);
     }
@@ -507,6 +547,40 @@ export default function ActivityDetailScreen({ route, navigation }) {
                 </View>
               )}
             </View>
+
+            {isAdmin && (
+              <View style={styles.card}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionLabel}>Evaluators ({(activity?.evaluators || []).length})</Text>
+                  <TouchableOpacity onPress={openEvaluatorManager}>
+                    <Text style={styles.linkText}>Manage</Text>
+                  </TouchableOpacity>
+                </View>
+                {(activity?.evaluators || []).length === 0 ? (
+                  <Text style={styles.emptyText}>No evaluators assigned yet.</Text>
+                ) : (
+                  (activity?.evaluators || []).map(e => (
+                    <View key={e.id} style={styles.participantRow}>
+                      <Text style={[styles.participantName, { flex: 1 }]}>{e.name || 'Unnamed'}</Text>
+                    </View>
+                  ))
+                )}
+
+                {managingEvaluators && (
+                  <View style={styles.managePanel}>
+                    {evaluatorCandidates.map(ev => (
+                      <TouchableOpacity key={ev.id} style={styles.checkRow} onPress={() => toggleEvaluator(ev.id)} activeOpacity={0.7}>
+                        <View style={[styles.checkbox, selectedEvaluatorIds.has(ev.id) && styles.checkboxChecked]} />
+                        <Text style={styles.participantName}>{ev.name || 'Unnamed'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity style={[styles.btnPrimary, saving && styles.btnDisabled]} onPress={saveEvaluators} disabled={saving} activeOpacity={0.85}>
+                      {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnPrimaryText}>Save Evaluators</Text>}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
 
             {isAdmin && approvedParticipants.some(p => (peerFeedbackByFounder[p.id] || []).length > 0) && (
               <View style={styles.card}>
