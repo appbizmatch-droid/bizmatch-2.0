@@ -225,28 +225,33 @@ export default function InterviewRunnerScreen({ route, navigation }) {
     scheduleSave({ answers: next });
   };
 
-  // Continue on an empty free-text/number/duration/multi-choice input reads the same as
-  // tapping "Skip this question" — there's nothing to distinguish "typed nothing" from "chose
-  // not to answer" for these types, so recording an empty string / a bare 0 as if it were a
-  // real answer would be misleading in the review/summary later.
-  const submitOrSkip = (hasValue, value) => (hasValue ? recordAnswer(value) : skipQuestion());
-
   // Jumps back to any already-reached question (anywhere on activePath, not just the
   // immediately previous one) — used by both the single-step Back button and the outline
-  // panel's tap-to-jump. Reviewing an earlier answer clears it so the frontier lands back
-  // there, letting the interviewer re-answer it; anything already answered after it stays
-  // intact in `answers` until it's overwritten by whatever path is taken from here on
-  // (computeActivePath derives visibility fresh from answers every time, so nothing is lost,
-  // just temporarily out of the active path).
+  // panel's tap-to-jump.
+  //
+  // AUDIT-9: this used to clear the target question AND everything after it on activePath
+  // in one go, holding only the single question being reviewed in `restoredAnswer` (a lone
+  // scalar, not keyed by question). Reviewing back through several already-answered
+  // questions in one session (Q5 -> review Q3 -> review Q2 without resubmitting Q3 first)
+  // silently discarded whatever was sitting in `restoredAnswer` each time it got
+  // overwritten by the next jump — Q3's real interview answer was gone for good, forcing a
+  // blank re-ask, which is the "answers keep getting deleted" bug report.
+  //
+  // Now this only pulls the single target question out of `answers` for editing — nothing
+  // downstream is touched. If the interviewer resubmits the same answer, computeActivePath
+  // walks forward through the tree exactly as before and finds Q4/Q5's answers still sitting
+  // in `answers`, so it skips straight past them without re-asking anything. If the new
+  // answer actually changes which branch comes next, the old downstream answers simply
+  // become unreachable (harmless leftover data, same as an abandoned branch always was) —
+  // the interview asks the new branch's questions fresh, same end result as before, but
+  // without punishing a same-answer review with data loss.
   const jumpToQuestion = (targetId) => {
     if (targetId === currentQuestionId) return;
     dismissResumeBanner();
     const record = answers[targetId];
     if (!record) return;
     const trimmed = { ...answers };
-    const idx = activePath.indexOf(targetId);
-    if (idx === -1) return;
-    for (const id of activePath.slice(idx)) delete trimmed[id];
+    delete trimmed[targetId];
     setAnswers(trimmed);
     setRestoredAnswer(record);
     scheduleSave({ answers: trimmed });
@@ -370,6 +375,47 @@ export default function InterviewRunnerScreen({ route, navigation }) {
 
   const required = isQuestionDynamicallyRequired(currentQuestion);
   const section = TREE.sections.find(s => s.id === currentQuestion.section);
+
+  // AUDIT-10/11: Continue used to silently act as Skip on an empty answer
+  // (submitOrSkip fell through to skipQuestion whenever hasValue was
+  // false) — confusing, since the button said "Continue" but behaved like
+  // the separate "Skip this question" link below it. For the four
+  // free-form/selection types that have a Continue button, it's now
+  // disabled instead of falling back to skip; only the explicit Skip link
+  // skips. Centralized here so Continue can live in the shared footer next
+  // to Back instead of being duplicated inline per question type.
+  const continuableTypes = ['multi_choice', 'short_text', 'long_text', 'number', 'duration'];
+  const hasContinueButton = continuableTypes.includes(currentQuestion.type);
+  const currentHasValue = (() => {
+    switch (currentQuestion.type) {
+      case 'multi_choice': return draftMulti.length > 0;
+      case 'short_text':
+      case 'long_text': return draftText.trim().length > 0;
+      case 'number': return draftNumber.trim().length > 0 && !Number.isNaN(Number(draftNumber));
+      case 'duration': return draftNumber.trim().length > 0 && !Number.isNaN(Number(draftNumber));
+      default: return false;
+    }
+  })();
+  const handleContinue = () => {
+    if (!currentHasValue) return;
+    switch (currentQuestion.type) {
+      case 'multi_choice':
+        recordAnswer({ type: 'multi_choice', optionIds: draftMulti });
+        break;
+      case 'short_text':
+      case 'long_text':
+        recordAnswer({ type: currentQuestion.type, text: draftText });
+        break;
+      case 'number':
+        recordAnswer({ type: 'number', value: Number(draftNumber) });
+        break;
+      case 'duration':
+        recordAnswer({ type: 'duration', amount: Number(draftNumber), unit: draftDurationUnit });
+        break;
+      default:
+        break;
+    }
+  };
   const sortedBookmarks = [...recordingBookmarks].sort((a, b) => a.timeSeconds - b.timeSeconds);
   const bookmarkGroups = groupBookmarksBySection(TREE, sortedBookmarks);
 
@@ -587,70 +633,43 @@ export default function InterviewRunnerScreen({ route, navigation }) {
           )}
 
           {currentQuestion.type === 'multi_choice' && (
-            <View>
-              <View style={styles.chipRow}>
-                {(currentQuestion.options || []).map((opt) => {
-                  const on = draftMulti.includes(opt.id);
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      style={[styles.chip, on && { backgroundColor: C.primary, borderColor: C.primary }]}
-                      onPress={() => setDraftMulti(on ? draftMulti.filter(o => o !== opt.id) : [...draftMulti, opt.id])}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.chipText, on && { color: '#fff' }]}>{opt.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => submitOrSkip(draftMulti.length > 0, { type: 'multi_choice', optionIds: draftMulti })}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryBtnText}>Continue</Text>
-              </TouchableOpacity>
+            <View style={styles.chipRow}>
+              {(currentQuestion.options || []).map((opt) => {
+                const on = draftMulti.includes(opt.id);
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.chip, on && { backgroundColor: C.primary, borderColor: C.primary }]}
+                    onPress={() => setDraftMulti(on ? draftMulti.filter(o => o !== opt.id) : [...draftMulti, opt.id])}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.chipText, on && { color: '#fff' }]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
           {(currentQuestion.type === 'short_text' || currentQuestion.type === 'long_text') && (
-            <View>
-              <TextInput
-                style={[styles.input, currentQuestion.type === 'long_text' && styles.inputMultiline]}
-                multiline={currentQuestion.type === 'long_text'}
-                placeholder="Type the answer…"
-                placeholderTextColor={C.textHint}
-                value={draftText}
-                onChangeText={setDraftText}
-              />
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => submitOrSkip(draftText.trim().length > 0, { type: currentQuestion.type, text: draftText })}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryBtnText}>Continue</Text>
-              </TouchableOpacity>
-            </View>
+            <TextInput
+              style={[styles.input, currentQuestion.type === 'long_text' && styles.inputMultiline]}
+              multiline={currentQuestion.type === 'long_text'}
+              placeholder="Type the answer…"
+              placeholderTextColor={C.textHint}
+              value={draftText}
+              onChangeText={setDraftText}
+            />
           )}
 
           {currentQuestion.type === 'number' && (
-            <View>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor={C.textHint}
-                value={draftNumber}
-                onChangeText={setDraftNumber}
-              />
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => submitOrSkip(draftNumber.trim().length > 0 && !Number.isNaN(Number(draftNumber)), { type: 'number', value: Number(draftNumber) })}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryBtnText}>Continue</Text>
-              </TouchableOpacity>
-            </View>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor={C.textHint}
+              value={draftNumber}
+              onChangeText={setDraftNumber}
+            />
           )}
 
           {currentQuestion.type === 'duration' && (
@@ -675,16 +694,6 @@ export default function InterviewRunnerScreen({ route, navigation }) {
                   </TouchableOpacity>
                 ))}
               </View>
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => submitOrSkip(
-                  draftNumber.trim().length > 0 && !Number.isNaN(Number(draftNumber)),
-                  { type: 'duration', amount: Number(draftNumber), unit: draftDurationUnit },
-                )}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryBtnText}>Continue</Text>
-              </TouchableOpacity>
             </View>
           )}
 
@@ -696,9 +705,24 @@ export default function InterviewRunnerScreen({ route, navigation }) {
         </ScrollView>
 
         <View style={styles.footer}>
-          <TouchableOpacity onPress={goBack} disabled={!getPreviousQuestionId(activePath, currentQuestionId)}>
-            <Text style={[styles.backText, !getPreviousQuestionId(activePath, currentQuestionId) && { opacity: 0.4 }]}>← Back</Text>
+          <TouchableOpacity
+            style={[styles.backBtn, !getPreviousQuestionId(activePath, currentQuestionId) && { opacity: 0.4 }]}
+            onPress={goBack}
+            disabled={!getPreviousQuestionId(activePath, currentQuestionId)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.backBtnText}>← Back</Text>
           </TouchableOpacity>
+          {hasContinueButton && (
+            <TouchableOpacity
+              style={[styles.primaryBtn, styles.continueBtn, !currentHasValue && { opacity: 0.5 }]}
+              onPress={handleContinue}
+              disabled={!currentHasValue}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryBtnText}>Continue</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </AppShell>
@@ -816,7 +840,16 @@ function makeStyles(C) {
 
     skipText: { ...typography.labelLarge, color: C.textHint },
 
-    footer: { paddingVertical: 16, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
-    backText: { ...typography.labelLarge, color: C.primary },
+    // AUDIT-10/11: Back used to sit alone in the footer, far from wherever
+    // that question type's own inline Continue button happened to be —
+    // now they're a single row, Back at 30% / Continue at 70% (flex ratio
+    // below), so the two primary actions are always in the same place.
+    footer: { flexDirection: 'row', gap: 12, paddingVertical: 16, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
+    backBtn: {
+      flex: 3, borderRadius: radius.pill, paddingVertical: 16, alignItems: 'center',
+      borderWidth: 1.5, borderColor: C.surfaceBorder,
+    },
+    backBtnText: { ...typography.labelLarge, color: C.primary, fontWeight: '700' },
+    continueBtn: { flex: 7, marginTop: 0 },
   });
 }
