@@ -97,3 +97,5 @@ frontend/e2e/
 not part of the repo/
 testing run screens/
 backend/scripts/seed-50-users.js
+.vercel
+.env*

@@ -15,8 +15,8 @@
   NODE_VERSION = "20"
   # Supabase URL + publishable key are safe in client bundles (not secrets) —
   # required at build time since Expo inlines EXPO_PUBLIC_* vars statically.
-  EXPO_PUBLIC_SUPABASE_URL = "https://ulzhnxrjbqnfgbchozzy.supabase.co"
-  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VFYTovK8AIC6FXH978-ODQ_JBWKw_J5"
+  EXPO_PUBLIC_SUPABASE_URL = "https://eoawnewluibnrqpznqxd.supabase.co"
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ybwelgBUBVdowTy_qM91Cw_cJOQtbiR"
 
 # ─── SPA routing ─────────────────────────────────────────────────────────────
 # All paths fall back to index.html so React Navigation handles routing.
