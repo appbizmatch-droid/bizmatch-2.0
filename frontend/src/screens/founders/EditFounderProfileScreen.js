@@ -20,7 +20,7 @@ import { uploadPhoto } from '../../services/auth.service';
 import AppShell from '../../components/AppShell';
 import CapabilityPriorityList from '../../components/founder/CapabilityPriorityList';
 import { ADMIN_NAV_ITEMS, FOUNDER_NAV_ITEMS } from '../../config/nav';
-import { SectionCard, useIsDesktop } from '../../components/ui';
+import { SectionCard, ResponsiveRow, useIsDesktop } from '../../components/ui';
 
 const STAGES = ['idea', 'mvp', 'growth', 'scale'];
 const STAGE_LABELS = { idea: 'Idea', mvp: 'MVP', growth: 'Growth', scale: 'Scale' };
@@ -322,53 +322,59 @@ export default function EditFounderProfileScreen({ route, navigation }) {
           <Text style={styles.pageTitle}>Edit Profile</Text>
         </View>
 
-        {isSelf ? (
-          <SectionCard title="Photo" icon="camera-outline" C={C} style={styles.card}>
-            <View style={styles.photoRow}>
-              <TouchableOpacity onPress={handlePickPhoto} disabled={photoUploading} activeOpacity={0.8}>
-                {photoUrl ? (
-                  <Image source={{ uri: photoUrl }} style={styles.photo} />
-                ) : (
-                  <View style={[styles.photo, styles.photoPlaceholder]}>
-                    <Text style={styles.photoPlaceholderText}>{currentUser?.name ? currentUser.name[0].toUpperCase() : '?'}</Text>
-                  </View>
-                )}
-                {photoUploading ? (
-                  <View style={styles.photoOverlay}><ActivityIndicator color="#fff" /></View>
-                ) : null}
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handlePickPhoto} disabled={photoUploading}>
-                <Text style={styles.changePhotoText}>{photoUrl ? 'Change photo' : 'Add photo'}</Text>
-              </TouchableOpacity>
+        <ResponsiveRow gap={16}>
+          {isSelf ? (
+            <View style={{ flex: 1 }}>
+              <SectionCard title="Photo" icon="camera-outline" C={C} style={[styles.card, { flex: 1 }]}>
+                <View style={styles.photoRow}>
+                  <TouchableOpacity onPress={handlePickPhoto} disabled={photoUploading} activeOpacity={0.8}>
+                    {photoUrl ? (
+                      <Image source={{ uri: photoUrl }} style={styles.photo} />
+                    ) : (
+                      <View style={[styles.photo, styles.photoPlaceholder]}>
+                        <Text style={styles.photoPlaceholderText}>{currentUser?.name ? currentUser.name[0].toUpperCase() : '?'}</Text>
+                      </View>
+                    )}
+                    {photoUploading ? (
+                      <View style={styles.photoOverlay}><ActivityIndicator color="#fff" /></View>
+                    ) : null}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handlePickPhoto} disabled={photoUploading}>
+                    <Text style={styles.changePhotoText}>{photoUrl ? 'Change photo' : 'Add photo'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </SectionCard>
             </View>
-          </SectionCard>
-        ) : null}
+          ) : null}
 
-        <SectionCard title="Basics" icon="person-outline" C={C} style={styles.card}>
-          <Text style={styles.fieldLabel}>ROLE / BACKGROUND</Text>
-          <TextInput style={styles.input} placeholder="e.g. Technical Co-Founder" placeholderTextColor={C.textHint}
-            value={basics.role_title} onChangeText={(v) => setBasics({ ...basics, role_title: v })} />
+          <View style={{ flex: isSelf ? 2 : 1 }}>
+            <SectionCard title="Basics" icon="person-outline" C={C} style={[styles.card, { flex: 1 }]}>
+              <Text style={styles.fieldLabel}>ROLE / BACKGROUND</Text>
+              <TextInput style={styles.input} placeholder="e.g. Technical Co-Founder" placeholderTextColor={C.textHint}
+                value={basics.role_title} onChangeText={(v) => setBasics({ ...basics, role_title: v })} />
 
-          <Text style={styles.fieldLabel}>VENTURE NAME</Text>
-          <TextInput style={styles.input} placeholder="Your startup's name" placeholderTextColor={C.textHint}
-            value={basics.venture_name} onChangeText={(v) => setBasics({ ...basics, venture_name: v })} />
+              <Text style={styles.fieldLabel}>VENTURE NAME</Text>
+              <TextInput style={styles.input} placeholder="Your startup's name" placeholderTextColor={C.textHint}
+                value={basics.venture_name} onChangeText={(v) => setBasics({ ...basics, venture_name: v })} />
 
-          <Text style={styles.fieldLabel}>INDUSTRY</Text>
-          <TextInput style={styles.input} placeholder="e.g. FinTech, HealthTech" placeholderTextColor={C.textHint}
-            value={basics.industry} onChangeText={(v) => setBasics({ ...basics, industry: v })} />
+              <Text style={styles.fieldLabel}>INDUSTRY</Text>
+              <TextInput style={styles.input} placeholder="e.g. FinTech, HealthTech" placeholderTextColor={C.textHint}
+                value={basics.industry} onChangeText={(v) => setBasics({ ...basics, industry: v })} />
 
-          <Text style={styles.fieldLabel}>LOCATION</Text>
-          <TextInput style={styles.input} placeholder="e.g. Tel Aviv" placeholderTextColor={C.textHint}
-            value={basics.location} onChangeText={(v) => setBasics({ ...basics, location: v })} />
+              <Text style={styles.fieldLabel}>LOCATION</Text>
+              <TextInput style={styles.input} placeholder="e.g. Tel Aviv" placeholderTextColor={C.textHint}
+                value={basics.location} onChangeText={(v) => setBasics({ ...basics, location: v })} />
 
-          <Text style={styles.fieldLabel}>CURRENT STAGE</Text>
-          <View style={styles.chipRow}>
-            {STAGES.map(s => (
-              <Chip key={s} label={STAGE_LABELS[s]} selected={basics.current_stage === s}
-                onPress={() => setBasics({ ...basics, current_stage: s })} C={C} styles={styles} />
-            ))}
+              <Text style={styles.fieldLabel}>CURRENT STAGE</Text>
+              <View style={styles.chipRow}>
+                {STAGES.map(s => (
+                  <Chip key={s} label={STAGE_LABELS[s]} selected={basics.current_stage === s}
+                    onPress={() => setBasics({ ...basics, current_stage: s })} C={C} styles={styles} />
+                ))}
+              </View>
+            </SectionCard>
           </View>
-        </SectionCard>
+        </ResponsiveRow>
 
         <SectionCard title="Commitment" icon="time-outline" C={C} style={styles.card}>
           <Text style={styles.fieldLabel}>HOURS PER WEEK</Text>
@@ -417,49 +423,55 @@ export default function EditFounderProfileScreen({ route, navigation }) {
           <CapabilityPriorityList items={needs} onChange={setNeeds} C={C} color={C.warning} />
         </SectionCard>
 
-        <SectionCard title="Resume / CV" icon="document-text-outline" C={C} style={styles.card}>
-          {cvUrl ? (
-            <View style={styles.cvRow}>
-              <TouchableOpacity style={styles.cvViewBtn} onPress={() => Linking.openURL(cvUrl)} activeOpacity={0.75}>
-                <Ionicons name="document-text" size={16} color={C.primary} />
-                <Text style={styles.cvViewText}>View current CV</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnOutline} onPress={handlePickCv} disabled={cvUploading} activeOpacity={0.85}>
-                {cvUploading ? <ActivityIndicator color={C.textSecondary} /> : <Text style={styles.btnOutlineText}>Replace</Text>}
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={[styles.cvUploadBtn, cvUploading && styles.btnDisabled]} onPress={handlePickCv} disabled={cvUploading} activeOpacity={0.85}>
-              {cvUploading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnPrimaryText}>Upload CV (PDF)</Text>}
-            </TouchableOpacity>
-          )}
-        </SectionCard>
-
-        <SectionCard title="Partner requirements" icon="person-add-outline" C={C} style={styles.card}>
-          <Text style={styles.fieldLabel}>ROLE WANTED</Text>
-          <TextInput style={styles.input} placeholder="e.g. Technical Co-Founder" placeholderTextColor={C.textHint}
-            value={partner.role_wanted} onChangeText={(v) => setPartner({ ...partner, role_wanted: v })} />
-
-          <Text style={styles.fieldLabel}>COMMITMENT REQUIRED</Text>
-          <TextInput style={styles.input} placeholder="e.g. Full Time" placeholderTextColor={C.textHint}
-            value={partner.commitment_required} onChangeText={(v) => setPartner({ ...partner, commitment_required: v })} />
-
-          <Text style={styles.fieldLabel}>AMBITION</Text>
-          <TextInput style={styles.input} placeholder="e.g. Venture Scale" placeholderTextColor={C.textHint}
-            value={partner.ambition_required} onChangeText={(v) => setPartner({ ...partner, ambition_required: v })} />
-
-          <Text style={[styles.fieldLabel, { marginTop: 20 }]}>MUST PROVIDE</Text>
-          <View style={styles.chipRow}>
-            {CAPABILITIES.map(c => (
-              <Chip key={c} label={c} selected={mustProvide.includes(c)}
-                onPress={() => toggleMustProvide(c)} C={C} styles={styles} />
-            ))}
+        <ResponsiveRow gap={16}>
+          <View style={{ flex: 1 }}>
+            <SectionCard title="Resume / CV" icon="document-text-outline" C={C} style={[styles.card, { flex: 1 }]}>
+              {cvUrl ? (
+                <View style={styles.cvRow}>
+                  <TouchableOpacity style={styles.cvViewBtn} onPress={() => Linking.openURL(cvUrl)} activeOpacity={0.75}>
+                    <Ionicons name="document-text" size={16} color={C.primary} />
+                    <Text style={styles.cvViewText}>View current CV</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.btnOutline} onPress={handlePickCv} disabled={cvUploading} activeOpacity={0.85}>
+                    {cvUploading ? <ActivityIndicator color={C.textSecondary} /> : <Text style={styles.btnOutlineText}>Replace</Text>}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={[styles.cvUploadBtn, cvUploading && styles.btnDisabled]} onPress={handlePickCv} disabled={cvUploading} activeOpacity={0.85}>
+                  {cvUploading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnPrimaryText}>Upload CV (PDF)</Text>}
+                </TouchableOpacity>
+              )}
+            </SectionCard>
           </View>
 
-          <Text style={[styles.fieldLabel, { marginTop: 20 }]}>PREFERRED TRAITS</Text>
-          <TagList items={preferredTraits} onRemove={(t) => setPreferredTraits(preferredTraits.filter(x => x !== t))} C={C} styles={styles} />
-          <TagInput placeholder="e.g. Long-term commitment & resilience" onAdd={(t) => setPreferredTraits([...preferredTraits, t])} C={C} styles={styles} />
-        </SectionCard>
+          <View style={{ flex: 2 }}>
+            <SectionCard title="Partner requirements" icon="person-add-outline" C={C} style={[styles.card, { flex: 1 }]}>
+              <Text style={styles.fieldLabel}>ROLE WANTED</Text>
+              <TextInput style={styles.input} placeholder="e.g. Technical Co-Founder" placeholderTextColor={C.textHint}
+                value={partner.role_wanted} onChangeText={(v) => setPartner({ ...partner, role_wanted: v })} />
+
+              <Text style={styles.fieldLabel}>COMMITMENT REQUIRED</Text>
+              <TextInput style={styles.input} placeholder="e.g. Full Time" placeholderTextColor={C.textHint}
+                value={partner.commitment_required} onChangeText={(v) => setPartner({ ...partner, commitment_required: v })} />
+
+              <Text style={styles.fieldLabel}>AMBITION</Text>
+              <TextInput style={styles.input} placeholder="e.g. Venture Scale" placeholderTextColor={C.textHint}
+                value={partner.ambition_required} onChangeText={(v) => setPartner({ ...partner, ambition_required: v })} />
+
+              <Text style={[styles.fieldLabel, { marginTop: 20 }]}>MUST PROVIDE</Text>
+              <View style={styles.chipRow}>
+                {CAPABILITIES.map(c => (
+                  <Chip key={c} label={c} selected={mustProvide.includes(c)}
+                    onPress={() => toggleMustProvide(c)} C={C} styles={styles} />
+                ))}
+              </View>
+
+              <Text style={[styles.fieldLabel, { marginTop: 20 }]}>PREFERRED TRAITS</Text>
+              <TagList items={preferredTraits} onRemove={(t) => setPreferredTraits(preferredTraits.filter(x => x !== t))} C={C} styles={styles} />
+              <TagInput placeholder="e.g. Long-term commitment & resilience" onAdd={(t) => setPreferredTraits([...preferredTraits, t])} C={C} styles={styles} />
+            </SectionCard>
+          </View>
+        </ResponsiveRow>
 
         <SectionCard title="Deal breakers" icon="close-circle-outline" C={C} style={styles.card}>
           <View style={[{ opacity: noDealBreakers ? 0.5 : 1 }]} pointerEvents={noDealBreakers ? 'none' : 'auto'}>
@@ -515,7 +527,7 @@ export default function EditFounderProfileScreen({ route, navigation }) {
 function makeStyles(C) {
   return StyleSheet.create({
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
-    scrollContent: { paddingBottom: 48, paddingHorizontal: 20, maxWidth: 800, width: '100%', alignSelf: 'center' },
+    scrollContent: { paddingBottom: 48, paddingHorizontal: 20, maxWidth: 1200, width: '100%', alignSelf: 'center' },
 
     titleRow: { marginTop: 20, marginBottom: 16 },
     backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
