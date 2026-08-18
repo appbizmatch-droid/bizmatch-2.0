@@ -15,7 +15,7 @@ import useAppStore from '../../store/appStore';
 import { colors, investorColors, radius, cardShadow, typography } from '../../theme';
 import {
   getActivity, createActivity, updateActivity, setActivityParticipants,
-  registerForActivity, decideActivityParticipant,
+  registerForActivity, decideActivityParticipant, deleteActivity,
   ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, formatActivityDateRange,
 } from '../../services/activities.service';
 import { listFounders, DIMENSIONS, DIMENSION_LABELS } from '../../services/founders.service';
@@ -142,6 +142,7 @@ export default function ActivityDetailScreen({ route, navigation }) {
   // listPeerFeedback existed but nothing in the UI ever called it, so admins
   // had no way to see what founders submitted about each other here.
   const [peerFeedbackByFounder, setPeerFeedbackByFounder] = useState({});
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!activityId) return;
@@ -280,6 +281,31 @@ export default function ActivityDetailScreen({ route, navigation }) {
     } finally {
       setDecidingId(null);
     }
+  };
+
+  const handleDeleteActivity = () => {
+    showAlert(
+      'Delete Activity',
+      'This activity, its participant list, and any evaluations tied to it will be permanently deleted. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await deleteActivity(activityId);
+              navigation.goBack();
+            } catch (err) {
+              showAlert('Error', err.response?.data?.error || 'Could not delete this activity.');
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : FOUNDER_NAV_ITEMS;
@@ -518,6 +544,18 @@ export default function ActivityDetailScreen({ route, navigation }) {
                 )}
               </View>
             )}
+
+            {isAdmin && (
+              <View style={styles.card}>
+                <Text style={[styles.sectionLabel, { color: C.error }]}>Danger Zone</Text>
+                <Text style={[styles.emptyText, { marginTop: 6, marginBottom: 12 }]}>
+                  Permanently delete this activity and its participant/evaluation data.
+                </Text>
+                <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteActivity} activeOpacity={0.85} disabled={deleting}>
+                  {deleting ? <ActivityIndicator color={C.error} size="small" /> : <Text style={styles.deleteBtnText}>Delete Activity</Text>}
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -616,6 +654,11 @@ function makeStyles(C) {
     backText: { color: C.primary, ...typography.labelLarge },
     scrollContent: { padding: 20, paddingTop: 8, paddingBottom: 48, maxWidth: 900, width: '100%', alignSelf: 'center' },
     card: { backgroundColor: C.surface, borderRadius: radius.lg, padding: 16, marginBottom: 14, ...cardShadow },
+    deleteBtn: {
+      borderWidth: 1, borderColor: C.error, borderRadius: radius.md,
+      paddingVertical: 12, alignItems: 'center',
+    },
+    deleteBtnText: { color: C.error, fontWeight: '700', fontSize: 14 },
     titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
 
     label: { ...typography.labelLarge, color: C.textSecondary, marginBottom: 6, marginTop: 10 },
