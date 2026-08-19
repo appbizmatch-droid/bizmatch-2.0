@@ -87,12 +87,23 @@ async function notifyOnTransition(
     });
   }
   if (crossedReadyThreshold) {
-    // ref_id is bigint — the other founder's id is a uuid, so it can't go there;
-    // it's carried in payload.founderId instead (what the bell's tap-to-navigate reads).
-    await Promise.all([
-      emitNotification(aId, "match_ready", null, { founderId: bId, founderName: nameOf(bId), name: nameOf(bId) }),
-      emitNotification(bId, "match_ready", null, { founderId: aId, founderName: nameOf(aId), name: nameOf(aId) }),
-    ]);
+    // FND-08: a founder already on a team isn't shopping for a partner (the
+    // founder-self UI hides the Matches tab entirely once founder.team is
+    // set — see FounderProfileScreen.js), and neither is anyone paired with
+    // one — so a new-match suggestion is moot for both sides once either is
+    // already teamed. Skip the notification rather than firing one with
+    // nowhere for the recipient to act on it.
+    const teamed = await query<{ founder_id: string }>(
+      "SELECT founder_id FROM team_founders WHERE founder_id = ANY($1::uuid[])", [[aId, bId]],
+    );
+    if (teamed.length === 0) {
+      // ref_id is bigint — the other founder's id is a uuid, so it can't go there;
+      // it's carried in payload.founderId instead (what the bell's tap-to-navigate reads).
+      await Promise.all([
+        emitNotification(aId, "match_ready", null, { founderId: bId, founderName: nameOf(bId), name: nameOf(bId) }),
+        emitNotification(bId, "match_ready", null, { founderId: aId, founderName: nameOf(aId), name: nameOf(aId) }),
+      ]);
+    }
   }
 }
 
