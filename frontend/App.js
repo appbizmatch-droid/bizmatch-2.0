@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { navigationRef } from './src/navigation/navigationRef';
 import * as Device from 'expo-device';
 import {
   setNotificationHandler,
@@ -23,8 +24,6 @@ setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
-
-export const navigationRef = createNavigationContainerRef();
 
 async function registerForPushNotifications() {
   if (!Device.isDevice) return;
@@ -63,12 +62,17 @@ export default function App() {
       bumpTick();
     });
 
-    // User taps a system notification → navigate to the relevant founder
-    // profile (no-op on web)
+    // User taps a system notification → navigate to the relevant screen
+    // (no-op on web)
     const responseSub = addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data || {};
-      if (navigationRef.isReady() && data.founderId) {
+      if (!navigationRef.isReady()) return;
+      if (data.founderId) {
         navigationRef.navigate('FounderProfile', { founderId: data.founderId });
+      } else if ((data.type === 'assessment_requested' || data.type === 'activity_added') && data.activityId) {
+        navigationRef.navigate('ActivityDetail', { activityId: data.activityId });
+      } else if (data.type === 'team_joined' && data.teamId) {
+        navigationRef.navigate('TeamProfile', { teamId: data.teamId });
       }
     });
 

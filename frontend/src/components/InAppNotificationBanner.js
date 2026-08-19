@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { navigationRef } from '../navigation/navigationRef';
 import useAppStore from '../store/appStore';
 
 const TYPE_ICON = {
@@ -16,7 +16,6 @@ const TYPE_ICON = {
 const DISMISS_AFTER_MS = 4500;
 
 export default function InAppNotificationBanner() {
-  const navigation   = useNavigation();
   const insets       = useSafeAreaInsets();
   const pendingBanner  = useAppStore(s => s.pendingBanner);
   const dismissBanner  = useAppStore(s => s.dismissBanner);
@@ -56,16 +55,17 @@ export default function InAppNotificationBanner() {
     clearTimeout(timerRef.current);
     const banner = currentRef.current;
     dismissBanner();
+    if (!navigationRef.isReady()) return;
     if (banner?.data?.founderId) {
-      navigation.navigate('FounderProfile', { founderId: banner.data.founderId });
+      navigationRef.navigate('FounderProfile', { founderId: banner.data.founderId });
       return;
     }
     if ((banner?.data?.type === 'assessment_requested' || banner?.data?.type === 'activity_added') && banner?.data?.activityId) {
-      navigation.navigate('ActivityDetail', { activityId: banner.data.activityId });
+      navigationRef.navigate('ActivityDetail', { activityId: banner.data.activityId });
       return;
     }
     if (banner?.data?.type === 'team_joined' && banner?.data?.teamId) {
-      navigation.navigate('TeamProfile', { teamId: banner.data.teamId });
+      navigationRef.navigate('TeamProfile', { teamId: banner.data.teamId });
     }
   };
 
