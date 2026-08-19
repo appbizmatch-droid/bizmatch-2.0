@@ -1,5 +1,5 @@
 import { authenticate } from "../_shared/auth.ts";
-import { query } from "../_shared/db.ts";
+import { parseJsonColumn, query } from "../_shared/db.ts";
 import { json } from "../_shared/respond.ts";
 import { route } from "../_shared/router.ts";
 import { serveFunction } from "../_shared/serve.ts";
@@ -17,7 +17,7 @@ async function getNotifications(req: Request): Promise<Response> {
      ORDER BY created_at DESC LIMIT 50`,
     [user.id],
   );
-  return json(rows);
+  return json(rows.map((r) => ({ ...r, payload: parseJsonColumn(r.payload, {}) })));
 }
 
 // POST /functions/v1/notifications/read  { ids?, types? }
