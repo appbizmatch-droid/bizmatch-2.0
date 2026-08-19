@@ -43,7 +43,17 @@ async function markRead(req: Request): Promise<Response> {
   return json({ ok: true });
 }
 
+// DELETE /functions/v1/notifications
+async function clearAll(req: Request): Promise<Response> {
+  const user = await authenticate(req);
+  if (!user) return json({ error: "Unauthorized" }, 401);
+
+  await query(`DELETE FROM notifications WHERE user_id = $1`, [user.id]);
+  return json({ ok: true });
+}
+
 serveFunction(FN, [
   route(FN, "GET", "", getNotifications),
   route(FN, "POST", "/read", markRead),
+  route(FN, "DELETE", "", clearAll),
 ]);

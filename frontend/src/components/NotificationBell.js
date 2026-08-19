@@ -141,6 +141,16 @@ export default function NotificationBell({ tintColor }) {
     } catch { /* silent */ }
   }, []);
 
+  const clearAll = useCallback(async () => {
+    const prev = notifications;
+    setNotifications([]);
+    try {
+      await api.delete('/notifications');
+    } catch {
+      setNotifications(prev);
+    }
+  }, [notifications]);
+
   const handleOpen = () => {
     setOpen(true);
   };
@@ -186,7 +196,14 @@ export default function NotificationBell({ tintColor }) {
           <View style={styles.overlay}>
             <TouchableWithoutFeedback onPress={() => {}}>
               <View style={styles.bubble}>
-                <Text style={styles.bubbleTitle}>Notifications</Text>
+                <View style={styles.bubbleHeader}>
+                  <Text style={styles.bubbleTitle}>Notifications</Text>
+                  {notifications.length > 0 && (
+                    <TouchableOpacity onPress={clearAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={styles.clearAllText}>Clear all</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 {notifications.length === 0 ? (
                   <Text style={styles.emptyText}>No notifications yet</Text>
                 ) : (
@@ -260,16 +277,26 @@ const styles = StyleSheet.create({
     elevation: 12,
     overflow: 'hidden',
   },
-  bubbleTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#022466',
-    letterSpacing: 0.3,
+  bubbleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#DDE3F0',
+  },
+  bubbleTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#022466',
+    letterSpacing: 0.3,
+  },
+  clearAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#5B6B93',
   },
   list: { maxHeight: 360 },
   emptyText: {
