@@ -11,6 +11,7 @@ import {
 } from '../../services/interviews.service';
 import { showAlert } from '../../services/alert';
 import AppShell from '../../components/AppShell';
+import { useIsDesktop } from '../../components/ui';
 import { ADMIN_NAV_ITEMS } from '../../config/nav';
 import RecordingPlayer from '../../components/interview/RecordingPlayer';
 import { useInterviewRecording } from '../../hooks/useInterviewRecording';
@@ -39,6 +40,7 @@ export default function InterviewRunnerScreen({ route, navigation }) {
   const darkMode = useAppStore(s => s.darkMode);
   const C = darkMode ? investorColors : colors;
   const styles = makeStyles(C);
+  const isDesktop = useIsDesktop();
 
   const interviewId = route.params?.interviewId;
 
@@ -429,9 +431,75 @@ export default function InterviewRunnerScreen({ route, navigation }) {
   const sortedBookmarks = [...recordingBookmarks].sort((a, b) => a.timeSeconds - b.timeSeconds);
   const bookmarkGroups = groupBookmarksBySection(TREE, sortedBookmarks);
 
+  // The question index (legend + jump-to-question list) — a collapsible
+  // panel on mobile (screen space is tight), an always-open left sidebar
+  // on desktop instead, per user request. Same content either way.
+  const outlineContent = (
+    <>
+      <View style={styles.outlineLegend}>
+        <View style={styles.outlineLegendItem}>
+          <Ionicons name="checkmark-circle" size={13} color={C.success} />
+          <Text style={styles.outlineLegendText}>Answered</Text>
+        </View>
+        <View style={styles.outlineLegendItem}>
+          <Ionicons name="remove-circle-outline" size={13} color={C.textHint} />
+          <Text style={styles.outlineLegendText}>Skipped</Text>
+        </View>
+        <View style={styles.outlineLegendItem}>
+          <Ionicons name="radio-button-on" size={13} color={C.primary} />
+          <Text style={styles.outlineLegendText}>Current</Text>
+        </View>
+        <View style={styles.outlineLegendItem}>
+          <Ionicons name="person-circle-outline" size={13} color={C.primary} />
+          <Text style={styles.outlineLegendText}>For evaluator</Text>
+        </View>
+      </View>
+      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+        {outlineGroups.map((group) => (
+          <View key={group.sectionId} style={{ marginBottom: 10 }}>
+            <Text style={styles.outlineSectionLabel}>{group.label}</Text>
+            {group.questions.map((q) => {
+              const isCurrent = q.id === currentQuestionId;
+              const isSkipped = answers[q.id]?.skipped;
+              return (
+                <TouchableOpacity
+                  key={q.id}
+                  style={[styles.outlineRow, isCurrent && styles.outlineRowActive]}
+                  onPress={() => { jumpToQuestion(q.id); setOutlineOpen(false); }}
+                  disabled={isCurrent}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={isCurrent ? 'radio-button-on' : isSkipped ? 'remove-circle-outline' : 'checkmark-circle'}
+                    size={14}
+                    color={isCurrent ? C.primary : isSkipped ? C.textHint : C.success}
+                  />
+                  <Text
+                    style={[styles.outlineQuestionText, isCurrent && styles.outlineQuestionTextActive]}
+                    numberOfLines={1}
+                  >
+                    {substituteQuestionPlaceholders(q.text, meta || {})}
+                  </Text>
+                  {isEvaluatorQuestion(q) && <Ionicons name="person-circle-outline" size={13} color={C.primary} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+      </ScrollView>
+    </>
+  );
+
   return (
     <AppShell navigation={navigation} active="interviews" items={ADMIN_NAV_ITEMS}>
-      <View style={styles.container}>
+      <View style={[styles.container, isDesktop && styles.containerDesktop]}>
+        {isDesktop && (
+          <View style={styles.outlineSidebar}>
+            <Text style={styles.outlineSidebarTitle}>Questions</Text>
+            {outlineContent}
+          </View>
+        )}
+        <View style={isDesktop && styles.mainColumn}>
         <View style={styles.headerRow}>
           <Text style={styles.entrepreneurName}>{meta?.entrepreneurName}</Text>
           <View style={styles.headerActions}>
@@ -447,64 +515,23 @@ export default function InterviewRunnerScreen({ route, navigation }) {
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress.percent}%` }]} />
         </View>
-        <TouchableOpacity style={styles.sectionLabelRow} onPress={() => setOutlineOpen((o) => !o)} activeOpacity={0.7}>
-          <Text style={styles.sectionLabel}>{section?.label} · {progress.completedCount}/{progress.totalActiveCount}</Text>
-          <Ionicons name={outlineOpen ? 'chevron-up' : 'list-outline'} size={14} color={C.textHint} />
-        </TouchableOpacity>
+        {!isDesktop && (
+          <>
+            <TouchableOpacity style={styles.sectionLabelRow} onPress={() => setOutlineOpen((o) => !o)} activeOpacity={0.7}>
+              <Text style={styles.sectionLabel}>{section?.label} · {progress.completedCount}/{progress.totalActiveCount}</Text>
+              <Ionicons name={outlineOpen ? 'chevron-up' : 'list-outline'} size={14} color={C.textHint} />
+            </TouchableOpacity>
 
-        {outlineOpen && (
-          <View style={styles.outlinePanel}>
-          <View style={styles.outlineLegend}>
-            <View style={styles.outlineLegendItem}>
-              <Ionicons name="checkmark-circle" size={13} color={C.success} />
-              <Text style={styles.outlineLegendText}>Answered</Text>
-            </View>
-            <View style={styles.outlineLegendItem}>
-              <Ionicons name="remove-circle-outline" size={13} color={C.textHint} />
-              <Text style={styles.outlineLegendText}>Skipped</Text>
-            </View>
-            <View style={styles.outlineLegendItem}>
-              <Ionicons name="radio-button-on" size={13} color={C.primary} />
-              <Text style={styles.outlineLegendText}>Current</Text>
-            </View>
-            <View style={styles.outlineLegendItem}>
-              <Ionicons name="person-circle-outline" size={13} color={C.primary} />
-              <Text style={styles.outlineLegendText}>For evaluator</Text>
-            </View>
-          </View>
-          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
-            {outlineGroups.map((group) => (
-              <View key={group.sectionId} style={{ marginBottom: 10 }}>
-                <Text style={styles.outlineSectionLabel}>{group.label}</Text>
-                {group.questions.map((q) => {
-                  const isCurrent = q.id === currentQuestionId;
-                  const isSkipped = answers[q.id]?.skipped;
-                  return (
-                    <TouchableOpacity
-                      key={q.id}
-                      style={[styles.outlineRow, isCurrent && styles.outlineRowActive]}
-                      onPress={() => { jumpToQuestion(q.id); setOutlineOpen(false); }}
-                      disabled={isCurrent}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={isCurrent ? 'radio-button-on' : isSkipped ? 'remove-circle-outline' : 'checkmark-circle'}
-                        size={14}
-                        color={isCurrent ? C.primary : isSkipped ? C.textHint : C.success}
-                      />
-                      <Text
-                        style={[styles.outlineQuestionText, isCurrent && styles.outlineQuestionTextActive]}
-                        numberOfLines={1}
-                      >
-                        {substituteQuestionPlaceholders(q.text, meta || {})}
-                      </Text>
-                      {isEvaluatorQuestion(q) && <Ionicons name="person-circle-outline" size={13} color={C.primary} />}
-                    </TouchableOpacity>
-                  );
-                })}
+            {outlineOpen && (
+              <View style={styles.outlinePanel}>
+                {outlineContent}
               </View>
-            ))}
-          </ScrollView>
+            )}
+          </>
+        )}
+        {isDesktop && (
+          <View style={styles.sectionLabelRow}>
+            <Text style={styles.sectionLabel}>{section?.label} · {progress.completedCount}/{progress.totalActiveCount}</Text>
           </View>
         )}
 
@@ -759,6 +786,7 @@ export default function InterviewRunnerScreen({ route, navigation }) {
             </TouchableOpacity>
           )}
         </View>
+        </View>
       </View>
     </AppShell>
   );
@@ -770,6 +798,16 @@ function makeStyles(C) {
     emptyText: { ...typography.bodyMedium, color: C.textHint },
 
     container: { flex: 1, maxWidth: 680, width: '100%', alignSelf: 'center', paddingHorizontal: 20, paddingTop: 16 },
+    containerDesktop: {
+      flexDirection: 'row', alignItems: 'flex-start', maxWidth: 960, gap: 24,
+    },
+    mainColumn: { flex: 1, minWidth: 0 },
+    outlineSidebar: {
+      width: 260, flexShrink: 0, backgroundColor: C.surface, borderRadius: radius.lg,
+      borderWidth: 1, borderColor: C.surfaceBorder, padding: 14, marginTop: 4,
+      maxHeight: 720, ...(Platform.OS === 'web' ? { position: 'sticky', top: 16 } : null),
+    },
+    outlineSidebarTitle: { ...typography.labelLarge, color: C.textPrimary, fontWeight: '700', marginBottom: 10 },
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', rowGap: 8 },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' },
     entrepreneurName: { ...typography.titleMedium, color: C.textPrimary },
