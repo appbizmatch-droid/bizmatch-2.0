@@ -66,6 +66,7 @@ export default function NotificationBell({ tintColor }) {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
   const userId = useAuthStore(s => s.user?.id);
+  const isAdmin = useAuthStore(s => s.user?.role === 'admin');
   const notificationTick = useAppStore(s => s.notificationTick);
 
   const announceIfUnread = useCallback((n) => {
@@ -79,9 +80,11 @@ export default function NotificationBell({ tintColor }) {
         founderId: n.payload?.founderId,
         activityId: n.payload?.activityId,
         teamId: n.payload?.teamId,
+        selfId: userId,
+        isAdmin,
       },
     });
-  }, []);
+  }, [userId, isAdmin]);
 
   // One-time fetch for initial state (and whenever something else in the
   // app bumps notificationTick to force a resync) — Realtime then takes over
@@ -158,9 +161,17 @@ export default function NotificationBell({ tintColor }) {
   const handleTap = (item) => {
     setOpen(false);
     if (!item.readAt) markIds([item.id]);
-    // Founder-scoped notifications (evidence_added, deal_breaker_flagged,
-    // match_ready) carry the founder's id in payload.founderId — every
-    // navigator (admin or founder-self) has a 'FounderProfile' route.
+    // match_ready is the one founder-scoped type sent TO a founder rather
+    // than an admin — payload.founderId is the *other* party in the match,
+    // and GET /founders/:id is admin-or-self only, so a founder recipient
+    // would 403 on it ("Could not load founder profile"). Send them to
+    // their own profile's Matches tab instead, where the new match appears.
+    if (item.type === 'match_ready' && !isAdmin) {
+      navigation.navigate('FounderProfile', { founderId: userId });
+      return;
+    }
+    // Other founder-scoped notifications (evidence_added, deal_breaker_flagged)
+    // only ever go to admins, who can view any founder's profile.
     if (item.payload?.founderId) {
       navigation.navigate('FounderProfile', { founderId: item.payload.founderId });
       return;

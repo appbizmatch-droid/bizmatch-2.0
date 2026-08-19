@@ -56,6 +56,14 @@ export default function InAppNotificationBanner() {
     const banner = currentRef.current;
     dismissBanner();
     if (!navigationRef.isReady()) return;
+    // match_ready payload.founderId is the *other* party in the match, and
+    // GET /founders/:id is admin-or-self only — see NotificationBell's
+    // handleTap for the matching fix and the "Could not load founder
+    // profile" 403 this avoids for a founder recipient.
+    if (banner?.data?.type === 'match_ready' && !banner?.data?.isAdmin) {
+      navigationRef.navigate('FounderProfile', { founderId: banner.data.selfId });
+      return;
+    }
     if (banner?.data?.founderId) {
       navigationRef.navigate('FounderProfile', { founderId: banner.data.founderId });
       return;
